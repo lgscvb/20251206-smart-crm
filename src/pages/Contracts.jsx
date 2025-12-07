@@ -180,15 +180,16 @@ export default function Contracts() {
   }
 
   // 統計
+  const contractsArr = Array.isArray(contracts) ? contracts : []
   const stats = {
-    total: contracts?.length || 0,
-    active: contracts?.filter((c) => c.status === 'active').length || 0,
-    expiring: contracts?.filter((c) => {
+    total: contractsArr.length,
+    active: contractsArr.filter((c) => c.status === 'active').length,
+    expiring: contractsArr.filter((c) => {
       if (c.status !== 'active') return false
       const endDate = new Date(c.end_date)
       const daysLeft = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24))
       return daysLeft <= 30 && daysLeft > 0
-    }).length || 0
+    }).length
   }
 
   return (

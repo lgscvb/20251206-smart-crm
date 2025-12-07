@@ -52,12 +52,12 @@ export default function Dashboard() {
   const outstandingCount = (stats.pendingCount || 0) + (stats.overdueCount || 0)
 
   // 圖表資料
-  const chartData = branchRevenue?.map((b) => ({
+  const chartData = branchRevenueArr.map((b) => ({
     name: b.branch_name,
     營收: b.current_month_revenue || 0,
     待收: b.current_month_pending || 0,
     逾期: b.current_month_overdue || 0
-  })) || []
+  }))
 
   const pieData = [
     { name: '已收款', value: received },
@@ -354,7 +354,7 @@ export default function Dashboard() {
                   </td>
                 </tr>
               ) : (
-                branchRevenue?.map((branch, i) => (
+                branchRevenueArr.map((branch, i) => (
                   <tr key={i}>
                     <td className="font-medium">{branch.branch_name}</td>
                     <td>{branch.active_customers || 0}</td>

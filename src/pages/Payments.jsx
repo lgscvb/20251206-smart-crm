@@ -340,9 +340,11 @@ export default function Payments() {
   }
 
   // 統計
-  const pendingCount = paymentsDue?.filter((p) => p.payment_status === 'pending').length || 0
-  const overdueCount = overdueList?.length || 0
-  const totalOverdue = overdueList?.reduce((sum, p) => sum + (p.total_due || 0), 0) || 0
+  const paymentsDueArr = Array.isArray(paymentsDue) ? paymentsDue : []
+  const overdueListArr = Array.isArray(overdueList) ? overdueList : []
+  const pendingCount = paymentsDueArr.filter((p) => p.payment_status === 'pending').length
+  const overdueCount = overdueListArr.length
+  const totalOverdue = overdueListArr.reduce((sum, p) => sum + (p.total_due || 0), 0)
 
   // 當前使用的欄位配置
   const currentOptionalColumns = activeTab === 'due' ? DUE_COLUMNS : OVERDUE_COLUMNS

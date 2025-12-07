@@ -28,8 +28,11 @@ export default function DataTable({
   const [sortDir, setSortDir] = useState('asc')
   const [currentPage, setCurrentPage] = useState(1)
 
+  // 確保 data 是陣列
+  const safeData = Array.isArray(data) ? data : []
+
   // 搜尋過濾
-  const filteredData = data.filter((row) => {
+  const filteredData = safeData.filter((row) => {
     if (!search) return true
     return columns.some((col) => {
       const value = col.accessor ? row[col.accessor] : ''

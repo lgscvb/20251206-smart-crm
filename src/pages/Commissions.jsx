@@ -23,10 +23,11 @@ export default function Commissions() {
   })
 
   // 統計
+  const commissionsArr = Array.isArray(commissions) ? commissions : []
   const stats = {
-    pending: commissions?.filter((c) => c.commission_status === 'pending') || [],
-    eligible: commissions?.filter((c) => c.commission_status === 'eligible') || [],
-    paid: commissions?.filter((c) => c.commission_status === 'paid') || []
+    pending: commissionsArr.filter((c) => c.commission_status === 'pending'),
+    eligible: commissionsArr.filter((c) => c.commission_status === 'eligible'),
+    paid: commissionsArr.filter((c) => c.commission_status === 'paid')
   }
 
   const totalPending = stats.pending.reduce((sum, c) => sum + (c.commission_amount || 0), 0)
