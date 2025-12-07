@@ -80,7 +80,7 @@ export default function Dashboard() {
           loading={revenueLoading}
         />
         <StatCard
-          title="本期實收"
+          title="本期已收"
           value={`$${received.toLocaleString()}`}
           icon={CheckCircle}
           iconBg="bg-green-100"
@@ -105,25 +105,37 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* 次要統計 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="活躍客戶"
-          value={stats.totalCustomers}
-          icon={Users}
-          iconBg="bg-slate-100"
-          iconColor="text-slate-600"
-          loading={revenueLoading}
-        />
-        <StatCard
-          title="有效合約"
-          value={stats.totalContracts}
-          icon={FileText}
-          iconBg="bg-slate-100"
-          iconColor="text-slate-600"
-          loading={revenueLoading}
-        />
-      </div>
+      {/* 續約狀態統計 */}
+      {renewals?.length > 0 && (
+        <div className="card cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/renewals')}>
+          <div className="card-header">
+            <h3 className="card-title flex items-center gap-2">
+              <Bell className="w-5 h-5 text-orange-500" />
+              續約追蹤（60天內到期）
+            </h3>
+            <Badge variant="warning">{renewals.length} 份</Badge>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+            {[
+              { status: 'none', label: '待處理', color: 'bg-gray-100 text-gray-700' },
+              { status: 'notified', label: '待回覆', color: 'bg-blue-100 text-blue-700' },
+              { status: 'confirmed', label: '已確認', color: 'bg-purple-100 text-purple-700' },
+              { status: 'paid', label: '已收款', color: 'bg-green-100 text-green-700' },
+              { status: 'invoiced', label: '已開票', color: 'bg-teal-100 text-teal-700' },
+              { status: 'signed', label: '待回簽', color: 'bg-orange-100 text-orange-700' },
+              { status: 'completed', label: '完成', color: 'bg-emerald-100 text-emerald-700' }
+            ].map(({ status, label, color }) => {
+              const count = renewals.filter(r => (r.renewal_status || 'none') === status).length
+              return (
+                <div key={status} className={`${color} rounded-lg p-3 text-center`}>
+                  <div className="text-2xl font-bold">{count}</div>
+                  <div className="text-xs">{label}</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 圖表區 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

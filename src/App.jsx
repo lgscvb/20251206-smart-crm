@@ -10,6 +10,7 @@ import Commissions from './pages/Commissions'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import Prospects from './pages/Prospects'
+import ChurnedCustomers from './pages/ChurnedCustomers'
 import AIAssistant from './pages/AIAssistant'
 import DataValidation from './pages/DataValidation'
 
@@ -20,6 +21,7 @@ function App() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="customers" element={<Customers />} />
+        <Route path="customers/churned" element={<ChurnedCustomers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="contracts" element={<Contracts />} />
         <Route path="payments" element={<Payments />} />

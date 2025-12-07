@@ -9,7 +9,7 @@ export default defineConfig({
       '/proxy': {
         target: 'https://auto.yourspce.org',
         changeOrigin: true,
-        secure: true,
+        secure: false,  // 允許自簽憑證
         rewrite: (path) => path.replace(/^\/proxy/, '')
       }
     }

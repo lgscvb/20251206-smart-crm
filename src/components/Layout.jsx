@@ -25,7 +25,6 @@ import Notifications from './Notifications'
 const navigation = [
   { name: '儀表板', href: '/dashboard', icon: LayoutDashboard },
   { name: '客戶管理', href: '/customers', icon: Users },
-  { name: '潛客管理', href: '/prospects', icon: UserPlus },
   { name: '合約管理', href: '/contracts', icon: FileText },
   { name: '繳費管理', href: '/payments', icon: CreditCard },
   { name: '續約提醒', href: '/renewals', icon: Bell },
@@ -33,6 +32,7 @@ const navigation = [
   { name: '報表中心', href: '/reports', icon: BarChart3 },
   { name: 'AI 助手', href: '/ai-assistant', icon: Bot },
   { name: '資料驗證', href: '/data-validation', icon: ShieldCheck },
+  { name: '潛客管理', href: '/prospects', icon: UserPlus },
 ]
 
 export default function Layout() {

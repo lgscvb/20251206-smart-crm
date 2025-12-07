@@ -4,7 +4,7 @@ import { useCustomers, useCreateCustomer, useBranches } from '../hooks/useApi'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import Badge, { StatusBadge } from '../components/Badge'
-import { Plus, User, Building, Phone, Mail, MessageSquare } from 'lucide-react'
+import { Plus, User, Building, Phone, Mail, MessageSquare, UserX } from 'lucide-react'
 
 export default function Customers() {
   const navigate = useNavigate()
@@ -13,7 +13,8 @@ export default function Customers() {
   const [statusFilter, setStatusFilter] = useState('')
 
   const { data: customers, isLoading, refetch } = useCustomers({
-    ...(statusFilter && { status: `eq.${statusFilter}` })
+    // 預設排除流失客戶，除非選擇特定狀態
+    status: statusFilter ? `eq.${statusFilter}` : 'neq.churned'
   })
   const { data: branches } = useBranches()
   const createCustomer = useCreateCustomer()
@@ -162,15 +163,22 @@ export default function Customers() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="input w-32"
             >
-              <option value="">全部</option>
+              <option value="">全部（不含流失）</option>
               <option value="active">活躍</option>
               <option value="lead">潛在客戶</option>
               <option value="inactive">非活躍</option>
-              <option value="churned">流失</option>
             </select>
           </div>
 
           <div className="flex-1" />
+
+          <button
+            onClick={() => navigate('/customers/churned')}
+            className="btn-secondary"
+          >
+            <UserX className="w-4 h-4 mr-2" />
+            流失客戶
+          </button>
 
           <button
             onClick={() => setShowCreateModal(true)}

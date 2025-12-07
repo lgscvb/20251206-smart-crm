@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Bot,
   Send,
@@ -12,9 +11,13 @@ import {
   Users,
   RefreshCw,
   Copy,
-  Check
+  Check,
+  ChevronDown,
+  Cpu,
+  Wrench
 } from 'lucide-react'
-import { callTool } from '../services/api'
+import { aiChatStream, getAIModels } from '../services/api'
+import { useQuery } from '@tanstack/react-query'
 
 // 預設問題範例
 const QUICK_PROMPTS = [
@@ -33,8 +36,19 @@ export default function AIAssistant() {
   ])
   const [input, setInput] = useState('')
   const [copied, setCopied] = useState(null)
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4')
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [currentTool, setCurrentTool] = useState(null)
+  const [streamingContent, setStreamingContent] = useState('')
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+
+  // 取得可用模型列表
+  const { data: modelsData } = useQuery({
+    queryKey: ['ai-models'],
+    queryFn: getAIModels,
+    staleTime: 1000 * 60 * 60 // 1 小時
+  })
 
   // 自動滾動到底部
   const scrollToBottom = () => {
@@ -43,146 +57,56 @@ export default function AIAssistant() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, streamingContent])
 
-  // 處理 AI 回應
-  const chatMutation = useMutation({
-    mutationFn: async (userMessage) => {
-      // 分析用戶意圖並調用對應工具
-      const lowerMsg = userMessage.toLowerCase()
-
-      // 查詢客戶
-      if (lowerMsg.includes('客戶') || lowerMsg.includes('查詢')) {
-        const match = userMessage.match(/查詢.*?[「「](.+?)[」」]/) ||
-          userMessage.match(/(.+?)的資料/) ||
-          userMessage.match(/客戶(.+)/)
-        if (match) {
-          const result = await callTool('crm_search_customers', { query: match[1].trim() })
-          return formatCustomerResult(result)
-        }
-        const result = await callTool('crm_search_customers', { limit: 10 })
-        return formatCustomerResult(result)
-      }
-
-      // 逾期查詢
-      if (lowerMsg.includes('逾期') || lowerMsg.includes('overdue')) {
-        const result = await callTool('report_overdue_list', {})
-        return formatOverdueResult(result)
-      }
-
-      // 合約到期
-      if (lowerMsg.includes('到期') || lowerMsg.includes('續約')) {
-        const result = await callTool('crm_get_renewal_reminders', { days: 30 })
-        return formatRenewalResult(result)
-      }
-
-      // 營收
-      if (lowerMsg.includes('營收') || lowerMsg.includes('收入')) {
-        const result = await callTool('report_revenue_summary', {})
-        return formatRevenueResult(result)
-      }
-
-      // 待繳
-      if (lowerMsg.includes('待繳') || lowerMsg.includes('應收')) {
-        const result = await callTool('crm_get_payments_due', {})
-        return formatPaymentsResult(result)
-      }
-
-      // 預設回應
-      return '我可以幫你做以下事情：\n\n' +
-        '1. **查詢客戶** - 例如「查詢王小明的資料」\n' +
-        '2. **逾期款項** - 例如「列出逾期的繳費」\n' +
-        '3. **到期合約** - 例如「哪些合約快到期」\n' +
-        '4. **營收統計** - 例如「這個月營收多少」\n' +
-        '5. **待繳款項** - 例如「有哪些待繳款」\n\n' +
-        '請問需要查詢什麼？'
-    },
-    onSuccess: (response) => {
-      setMessages((prev) => [...prev, { role: 'assistant', content: response }])
-    },
-    onError: (error) => {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: `查詢失敗：${error.message}` }
-      ])
-    }
-  })
-
-  // 格式化結果
-  const formatCustomerResult = (result) => {
-    if (!result?.success || !result?.data?.length) {
-      return '沒有找到相關客戶資料。'
-    }
-    const customers = result.data.slice(0, 5)
-    let text = `找到 ${result.total || customers.length} 位客戶：\n\n`
-    customers.forEach((c, i) => {
-      text += `**${i + 1}. ${c.name}**\n`
-      if (c.company_name) text += `   公司：${c.company_name}\n`
-      if (c.phone) text += `   電話：${c.phone}\n`
-      text += `   狀態：${c.status === 'active' ? '有效' : c.status}\n\n`
-    })
-    return text
-  }
-
-  const formatOverdueResult = (result) => {
-    if (!result?.success || !result?.data?.items?.length) {
-      return '目前沒有逾期的繳費記錄。'
-    }
-    const { total_count, total_amount, items } = result.data
-    let text = `**逾期統計**\n\n`
-    text += `- 逾期筆數：${total_count} 筆\n`
-    text += `- 逾期總額：$${total_amount?.toLocaleString() || 0}\n\n`
-    text += `**逾期明細（前5筆）**\n\n`
-    items.slice(0, 5).forEach((item, i) => {
-      text += `${i + 1}. ${item.customer_name} - $${item.total_due?.toLocaleString() || 0}（逾期 ${item.days_overdue} 天）\n`
-    })
-    return text
-  }
-
-  const formatRenewalResult = (result) => {
-    if (!result?.success || !result?.data?.length) {
-      return '30 天內沒有即將到期的合約。'
-    }
-    let text = `**即將到期的合約（30天內）**\n\n`
-    result.data.slice(0, 10).forEach((item, i) => {
-      text += `${i + 1}. ${item.customer_name} - ${item.days_remaining} 天後到期\n`
-    })
-    return text
-  }
-
-  const formatRevenueResult = (result) => {
-    if (!result?.success || !result?.data?.length) {
-      return '目前沒有營收資料。'
-    }
-    let text = `**營收統計**\n\n`
-    result.data.forEach((branch) => {
-      text += `**${branch.branch_name}**\n`
-      text += `- 已收款：$${branch.total_collected?.toLocaleString() || 0}\n`
-      text += `- 待收款：$${branch.total_pending?.toLocaleString() || 0}\n\n`
-    })
-    return text
-  }
-
-  const formatPaymentsResult = (result) => {
-    if (!result?.success || !result?.data?.length) {
-      return '目前沒有待繳款項。'
-    }
-    let text = `**待繳款項（前10筆）**\n\n`
-    result.data.slice(0, 10).forEach((item, i) => {
-      text += `${i + 1}. ${item.customer_name} - $${item.amount?.toLocaleString() || 0}（${item.payment_period}）\n`
-    })
-    return text
-  }
-
-  // 發送訊息
-  const handleSend = () => {
-    if (!input.trim() || chatMutation.isPending) return
+  // 發送訊息（使用串流）
+  const handleSend = useCallback(async () => {
+    if (!input.trim() || isStreaming) return
 
     const userMessage = input.trim()
-    setMessages((prev) => [...prev, { role: 'user', content: userMessage }])
     setInput('')
-    chatMutation.mutate(userMessage)
-  }
+    setMessages((prev) => [...prev, { role: 'user', content: userMessage }])
+    setIsStreaming(true)
+    setStreamingContent('')
+    setCurrentTool(null)
+
+    // 建立對話歷史
+    const chatHistory = messages
+      .slice(1)
+      .map((m) => ({ role: m.role, content: m.content }))
+    chatHistory.push({ role: 'user', content: userMessage })
+
+    let fullContent = ''
+
+    await aiChatStream(
+      chatHistory,
+      selectedModel,
+      // onChunk
+      (text) => {
+        fullContent += text
+        setStreamingContent(fullContent)
+        setCurrentTool(null)
+      },
+      // onTool
+      (toolName) => {
+        setCurrentTool(toolName)
+      },
+      // onDone
+      () => {
+        setMessages((prev) => [...prev, { role: 'assistant', content: fullContent }])
+        setStreamingContent('')
+        setIsStreaming(false)
+        setCurrentTool(null)
+      },
+      // onError
+      (error) => {
+        setMessages((prev) => [...prev, { role: 'assistant', content: `查詢失敗：${error}` }])
+        setStreamingContent('')
+        setIsStreaming(false)
+        setCurrentTool(null)
+      }
+    )
+  }, [input, isStreaming, messages, selectedModel])
 
   // 複製訊息
   const handleCopy = (content, index) => {
@@ -210,13 +134,39 @@ export default function AIAssistant() {
             <p className="text-sm text-gray-500">CRM 智能查詢助手</p>
           </div>
         </div>
-        <button
-          onClick={() => setMessages([messages[0]])}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
-        >
-          <RefreshCw className="w-4 h-4" />
-          清除對話
-        </button>
+        <div className="flex items-center gap-3">
+          {/* 模型選擇器 */}
+          <div className="relative">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="appearance-none pl-8 pr-8 py-1.5 text-sm bg-gray-100 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              {modelsData?.models?.map((model) => (
+                <option key={model.key} value={model.key}>
+                  {model.name}
+                </option>
+              )) || (
+                <>
+                  <option value="claude-sonnet-4.5">Claude Sonnet 4.5</option>
+                  <option value="claude-sonnet-4">Claude Sonnet 4</option>
+                  <option value="claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                </>
+              )}
+            </select>
+            <Cpu className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+          </div>
+          <button
+            onClick={() => setMessages([messages[0]])}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+          >
+            <RefreshCw className="w-4 h-4" />
+            清除對話
+          </button>
+        </div>
       </div>
 
       {/* Quick Prompts */}
@@ -283,16 +233,34 @@ export default function AIAssistant() {
             )}
           </div>
         ))}
-        {chatMutation.isPending && (
+        {isStreaming && (
           <div className="flex gap-3 justify-start">
             <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
-            <div className="bg-gray-100 rounded-2xl px-4 py-3">
-              <div className="flex items-center gap-2 text-gray-500">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm">正在查詢...</span>
-              </div>
+            <div className="bg-gray-100 rounded-2xl px-4 py-3 max-w-[80%]">
+              {currentTool ? (
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Wrench className="w-4 h-4 animate-pulse" />
+                  <span className="text-sm">正在執行 {currentTool}...</span>
+                </div>
+              ) : streamingContent ? (
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900">
+                  {streamingContent.split(/\*\*(.*?)\*\*/g).map((part, i) =>
+                    i % 2 === 1 ? (
+                      <strong key={i}>{part}</strong>
+                    ) : (
+                      <span key={i}>{part}</span>
+                    )
+                  )}
+                  <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-1" />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">正在思考...</span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -302,19 +270,25 @@ export default function AIAssistant() {
       {/* Input */}
       <div className="pt-4 border-t border-gray-200">
         <div className="flex gap-3">
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder="輸入問題，例如：查詢王小明的資料"
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            disabled={chatMutation.isPending}
+            onKeyDown={(e) => {
+              // 只有在非輸入法選字狀態下，按 Enter（不含 Shift）才送出
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                handleSend()
+              }
+            }}
+            placeholder="輸入問題，例如：查詢王小明的資料（Shift+Enter 換行）"
+            className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            rows={1}
+            disabled={isStreaming}
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || chatMutation.isPending}
+            disabled={!input.trim() || isStreaming}
             className="px-5 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Send className="w-5 h-5" />
