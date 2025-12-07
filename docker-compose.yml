@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  smartoffice-crm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smartoffice-crm
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.smartoffice.rule=Host(`hj.yourspce.org`)"
+      - "traefik.http.routers.smartoffice.entrypoints=websecure"
+      - "traefik.http.routers.smartoffice.tls.certresolver=letsencrypt"
+      - "traefik.http.services.smartoffice.loadbalancer.server.port=80"
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
