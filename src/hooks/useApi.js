@@ -144,12 +144,13 @@ export function useRenewalReminders(params = {}) {
 
   return useQuery({
     queryKey: ['renewals', params, selectedBranch],
-    queryFn: () => {
+    queryFn: async () => {
       const queryParams = { ...params, limit: 100 }
       if (selectedBranch) {
         queryParams.branch_id = `eq.${selectedBranch}`
       }
-      return db.getRenewalReminders(queryParams)
+      const data = await db.getRenewalReminders(queryParams)
+      return Array.isArray(data) ? data : []
     }
   })
 }
@@ -174,12 +175,13 @@ export function useBranchRevenue() {
 
   return useQuery({
     queryKey: ['branch-revenue', selectedBranch],
-    queryFn: () => {
+    queryFn: async () => {
       const params = {}
       if (selectedBranch) {
         params.branch_id = `eq.${selectedBranch}`
       }
-      return db.getBranchRevenue(params)
+      const data = await db.getBranchRevenue(params)
+      return Array.isArray(data) ? data : []
     }
   })
 }
