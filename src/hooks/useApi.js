@@ -105,12 +105,13 @@ export function useOverdueDetails(params = {}) {
 
   return useQuery({
     queryKey: ['overdue', params, selectedBranch],
-    queryFn: () => {
+    queryFn: async () => {
       const queryParams = { ...params, limit: 100 }
       if (selectedBranch) {
         queryParams.branch_id = `eq.${selectedBranch}`
       }
-      return db.getOverdueDetails(queryParams)
+      const data = await db.getOverdueDetails(queryParams)
+      return Array.isArray(data) ? data : []
     }
   })
 }
@@ -212,7 +213,11 @@ export function useTodayTasks() {
         // 組合成待辦事項
         const tasks = []
 
-        payments?.slice(0, 5).forEach((p) => {
+        // 確保是陣列（防止 API 回傳格式不同）
+        const paymentsArr = Array.isArray(payments) ? payments : []
+        const renewalsArr = Array.isArray(renewals) ? renewals : []
+
+        paymentsArr.slice(0, 5).forEach((p) => {
           tasks.push({
             task_type: 'payment_due',
             task_description: `${p.customer_name} - ${p.payment_period} 租金待繳`,
@@ -223,7 +228,7 @@ export function useTodayTasks() {
           })
         })
 
-        renewals?.filter((r) => r.days_remaining <= 30).slice(0, 5).forEach((r) => {
+        renewalsArr.filter((r) => r.days_remaining <= 30).slice(0, 5).forEach((r) => {
           tasks.push({
             task_type: 'contract_expiring',
             task_description: `${r.customer_name} 合約 ${r.days_remaining} 天後到期`,
@@ -249,7 +254,10 @@ export function useTodayTasks() {
 export function useBranches() {
   return useQuery({
     queryKey: ['branches'],
-    queryFn: () => db.getBranches(),
+    queryFn: async () => {
+      const data = await db.getBranches()
+      return Array.isArray(data) ? data : []
+    },
     staleTime: Infinity
   })
 }
