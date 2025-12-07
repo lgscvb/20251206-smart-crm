@@ -16,8 +16,7 @@ import {
   LogOut,
   UserPlus,
   Bot,
-  ShieldCheck,
-  HelpCircle
+  ShieldCheck
 } from 'lucide-react'
 import useStore from '../store/useStore'
 import { useBranches } from '../hooks/useApi'
@@ -39,7 +38,6 @@ const navigation = [
 export default function Layout() {
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [helpOpen, setHelpOpen] = useState(false)
   const { sidebarOpen, toggleSidebar, selectedBranch, setSelectedBranch } = useStore()
   const { data: branches } = useBranches()
 
@@ -171,15 +169,6 @@ export default function Layout() {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Help button */}
-              <button
-                onClick={() => setHelpOpen(true)}
-                className="p-2 text-gray-500 hover:text-jungle-600 hover:bg-jungle-50 rounded-lg transition-colors"
-                title="使用說明"
-              >
-                <HelpCircle className="w-5 h-5" />
-              </button>
-
               <Notifications />
 
               {/* User menu */}
@@ -202,127 +191,6 @@ export default function Layout() {
         </main>
       </div>
 
-      {/* Help Modal */}
-      {helpOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4" onClick={() => setHelpOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-jungle-100 rounded-xl flex items-center justify-center">
-                  <HelpCircle className="w-6 h-6 text-jungle-600" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">使用說明</h2>
-                  <p className="text-sm text-gray-500">Hour Jungle CRM 快速入門</p>
-                </div>
-              </div>
-              <button onClick={() => setHelpOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
-              {/* Quick Start */}
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">🚀 5 分鐘快速入門</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="p-4 bg-gray-50 rounded-xl">
-                      <div className="text-2xl mb-2">📊</div>
-                      <h4 className="font-medium text-gray-900">儀表板</h4>
-                      <p className="text-sm text-gray-500 mt-1">一眼看懂營收、客戶、合約狀況</p>
-                    </div>
-                    <div className="p-4 bg-gray-50 rounded-xl">
-                      <div className="text-2xl mb-2">👥</div>
-                      <h4 className="font-medium text-gray-900">客戶管理</h4>
-                      <p className="text-sm text-gray-500 mt-1">搜尋、篩選、查看客戶資料</p>
-                    </div>
-                    <div className="p-4 bg-gray-50 rounded-xl">
-                      <div className="text-2xl mb-2">💳</div>
-                      <h4 className="font-medium text-gray-900">繳費管理</h4>
-                      <p className="text-sm text-gray-500 mt-1">記錄收款、追蹤繳費狀態</p>
-                    </div>
-                    <div className="p-4 bg-gray-50 rounded-xl">
-                      <div className="text-2xl mb-2">🔄</div>
-                      <h4 className="font-medium text-gray-900">續約提醒</h4>
-                      <p className="text-sm text-gray-500 mt-1">追蹤即將到期的合約</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Status Guide */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">🏷️ 狀態說明</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                      <span className="w-3 h-3 bg-green-500 rounded-full"></span>
-                      <span className="font-medium text-green-700">生效中 / 已繳費</span>
-                      <span className="text-sm text-green-600 ml-auto">正常狀態</span>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg">
-                      <span className="w-3 h-3 bg-yellow-500 rounded-full"></span>
-                      <span className="font-medium text-yellow-700">即將到期 / 待繳費</span>
-                      <span className="text-sm text-yellow-600 ml-auto">需要注意</span>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
-                      <span className="w-3 h-3 bg-red-500 rounded-full"></span>
-                      <span className="font-medium text-red-700">已到期 / 逾期</span>
-                      <span className="text-sm text-red-600 ml-auto">需要處理</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tips */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">💡 小技巧</h3>
-                  <ul className="space-y-2 text-gray-600">
-                    <li className="flex items-start gap-2">
-                      <span className="text-jungle-500 mt-0.5">•</span>
-                      <span>點擊「📋 欄位」按鈕可以自訂要顯示的欄位</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-jungle-500 mt-0.5">•</span>
-                      <span>在報表中心切換「月/季/年」查看不同時間範圍</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-jungle-500 mt-0.5">•</span>
-                      <span>有問題可以問「AI 助手」，它會幫你解答</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-jungle-500 mt-0.5">•</span>
-                      <span>按 Cmd+R (Mac) 或 F5 (Windows) 重新整理頁面</span>
-                    </li>
-                  </ul>
-                </div>
-
-                {/* Keyboard Shortcuts */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">⌨️ 快捷鍵</h3>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                      <span className="text-gray-600">重新整理</span>
-                      <kbd className="px-2 py-1 bg-gray-200 rounded text-xs">Cmd+R</kbd>
-                    </div>
-                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                      <span className="text-gray-600">頁面搜尋</span>
-                      <kbd className="px-2 py-1 bg-gray-200 rounded text-xs">Cmd+F</kbd>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
-              <button
-                onClick={() => setHelpOpen(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                關閉
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
