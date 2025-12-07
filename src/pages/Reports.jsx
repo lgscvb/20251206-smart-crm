@@ -141,17 +141,18 @@ export default function Reports() {
   }, [timePeriod, activePeriod, monthlyRevenue, quarterlyRevenue, yearlyRevenue])
 
   // 營收圖表資料（使用選擇期間的數據）
-  const revenueChartData = branchRevenueData?.map((b) => ({
+  const branchRevenueArr = Array.isArray(branchRevenueData) ? branchRevenueData : []
+  const revenueChartData = branchRevenueArr.map((b) => ({
     name: b.branch_name,
     已收款: b.revenue || 0,
     待收款: b.pending || 0,
     逾期: b.overdue || 0
-  })) || []
+  }))
 
   // 收款狀態圓餅圖（使用選擇期間的數據）
-  const totalRevenue = branchRevenueData?.reduce((sum, b) => sum + (b.revenue || 0), 0) || 0
-  const totalPending = branchRevenueData?.reduce((sum, b) => sum + (b.pending || 0), 0) || 0
-  const totalOverdue = branchRevenueData?.reduce((sum, b) => sum + (b.overdue || 0), 0) || 0
+  const totalRevenue = branchRevenueArr.reduce((sum, b) => sum + (b.revenue || 0), 0)
+  const totalPending = branchRevenueArr.reduce((sum, b) => sum + (b.pending || 0), 0)
+  const totalOverdue = branchRevenueArr.reduce((sum, b) => sum + (b.overdue || 0), 0)
   const totalReceivable = selectedPeriodData?.total_due || (totalRevenue + totalPending + totalOverdue)
 
   const pieData = [
@@ -168,20 +169,22 @@ export default function Reports() {
 
   // 分館收款率對比（根據選擇期間）
   const branchCollectionData = useMemo(() => {
-    return branchRevenueData?.map((b) => {
+    const arr = Array.isArray(branchRevenueData) ? branchRevenueData : []
+    return arr.map((b) => {
       const rate = b.collection_rate || 0
       return {
         name: b.branch_name,
         收款率: rate,
         fill: rate >= 80 ? '#22c55e' : rate >= 60 ? '#f59e0b' : '#ef4444'
       }
-    }) || []
+    })
   }, [branchRevenueData])
 
   // 客戶類型分佈
   const customerTypeData = useMemo(() => {
-    if (!customers) return []
-    const types = customers.reduce((acc, c) => {
+    const customersArr = Array.isArray(customers) ? customers : []
+    if (customersArr.length === 0) return []
+    const types = customersArr.reduce((acc, c) => {
       const type = c.customer_type === 'corporate' ? '公司戶' : '個人戶'
       acc[type] = (acc[type] || 0) + 1
       return acc
@@ -191,8 +194,9 @@ export default function Reports() {
 
   // 客戶來源分佈
   const customerSourceData = useMemo(() => {
-    if (!customers) return []
-    const sources = customers.reduce((acc, c) => {
+    const customersArr = Array.isArray(customers) ? customers : []
+    if (customersArr.length === 0) return []
+    const sources = customersArr.reduce((acc, c) => {
       const source = c.source_channel || '直接來訪'
       acc[source] = (acc[source] || 0) + 1
       return acc
@@ -205,8 +209,9 @@ export default function Reports() {
 
   // 客戶狀態分佈
   const customerStatusData = useMemo(() => {
-    if (!customers) return []
-    const statuses = customers.reduce((acc, c) => {
+    const customersArr = Array.isArray(customers) ? customers : []
+    if (customersArr.length === 0) return []
+    const statuses = customersArr.reduce((acc, c) => {
       const status = c.status === 'active' ? '活躍' : c.status === 'inactive' ? '休眠' : c.status === 'prospect' ? '潛客' : '其他'
       acc[status] = (acc[status] || 0) + 1
       return acc
@@ -216,11 +221,12 @@ export default function Reports() {
 
   // 分館客戶分佈
   const branchCustomerData = useMemo(() => {
-    return branchRevenue?.map((b) => ({
+    const arr = Array.isArray(branchRevenue) ? branchRevenue : []
+    return arr.map((b) => ({
       name: b.branch_name,
       活躍客戶: b.active_customers || 0,
       有效合約: b.active_contracts || 0
-    })) || []
+    }))
   }, [branchRevenue])
 
   // 合約週期分佈
@@ -231,9 +237,10 @@ export default function Reports() {
     annual: '年繳'
   }
   const contractCycleData = useMemo(() => {
-    if (!contracts) return []
+    const contractsArr = Array.isArray(contracts) ? contracts : []
+    if (contractsArr.length === 0) return []
     // 只統計有效合約
-    const activeContracts = contracts.filter(c => c.status === 'active')
+    const activeContracts = contractsArr.filter(c => c.status === 'active')
     const cycles = activeContracts.reduce((acc, c) => {
       const cycle = c.payment_cycle || 'monthly'
       const label = CYCLE_LABELS[cycle] || cycle
@@ -245,14 +252,15 @@ export default function Reports() {
 
   // 合約到期分佈
   const contractExpiryData = useMemo(() => {
-    if (!renewals) return []
+    const renewalsArr = Array.isArray(renewals) ? renewals : []
+    if (renewalsArr.length === 0) return []
     const ranges = {
       '7天內': 0,
       '8-14天': 0,
       '15-30天': 0,
       '31-45天': 0
     }
-    renewals.forEach((r) => {
+    renewalsArr.forEach((r) => {
       const days = r.days_until_expiry || r.days_remaining || 0
       if (days <= 7) ranges['7天內']++
       else if (days <= 14) ranges['8-14天']++
@@ -1035,22 +1043,22 @@ export default function Reports() {
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div className="card">
               <p className="text-sm text-gray-500">總合約數</p>
-              <p className="text-3xl font-bold text-blue-600 mt-1">{contracts?.length || 0}</p>
+              <p className="text-3xl font-bold text-blue-600 mt-1">{(Array.isArray(contracts) ? contracts : []).length}</p>
             </div>
             <div className="card">
               <p className="text-sm text-gray-500">有效合約</p>
               <p className="text-3xl font-bold text-green-600 mt-1">
-                {contracts?.filter(c => c.status === 'active').length || 0}
+                {(Array.isArray(contracts) ? contracts : []).filter(c => c.status === 'active').length}
               </p>
             </div>
             <div className="card">
               <p className="text-sm text-gray-500">即將到期</p>
-              <p className="text-3xl font-bold text-orange-600 mt-1">{renewals?.length || 0}</p>
+              <p className="text-3xl font-bold text-orange-600 mt-1">{(Array.isArray(renewals) ? renewals : []).length}</p>
             </div>
             <div className="card">
               <p className="text-sm text-gray-500">月租總額</p>
               <p className="text-3xl font-bold text-purple-600 mt-1">
-                ${contracts?.filter(c => c.status === 'active').reduce((sum, c) => sum + (c.monthly_rent || 0), 0).toLocaleString() || 0}
+                ${(Array.isArray(contracts) ? contracts : []).filter(c => c.status === 'active').reduce((sum, c) => sum + (c.monthly_rent || 0), 0).toLocaleString()}
               </p>
             </div>
           </div>

@@ -28,7 +28,8 @@ export default function Dashboard() {
   const { data: renewals } = useRenewalReminders()
 
   // 計算統計（金額與筆數）
-  const stats = branchRevenue?.reduce(
+  const branchRevenueArr = Array.isArray(branchRevenue) ? branchRevenue : []
+  const stats = branchRevenueArr.reduce(
     (acc, branch) => ({
       totalCustomers: acc.totalCustomers + (branch.active_customers || 0),
       totalContracts: acc.totalContracts + (branch.active_contracts || 0),
@@ -40,7 +41,7 @@ export default function Dashboard() {
       overdueCount: acc.overdueCount + (branch.current_month_overdue_count || 0)
     }),
     { totalCustomers: 0, totalContracts: 0, monthlyRevenue: 0, monthlyPending: 0, overdueAmount: 0, paidCount: 0, pendingCount: 0, overdueCount: 0 }
-  ) || {}
+  )
 
   // 計算本期應收、已收、未收（金額與筆數）
   const receivable = (stats.monthlyRevenue || 0) + (stats.monthlyPending || 0) + (stats.overdueAmount || 0)
