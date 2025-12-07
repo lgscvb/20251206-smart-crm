@@ -9,7 +9,10 @@ import {
   Calendar,
   Bell,
   ArrowRight,
-  Building2
+  Building2,
+  DollarSign,
+  CheckCircle,
+  Clock
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import Badge, { StatusBadge } from '../components/Badge'
@@ -30,10 +33,16 @@ export default function Dashboard() {
       totalCustomers: acc.totalCustomers + (branch.active_customers || 0),
       totalContracts: acc.totalContracts + (branch.active_contracts || 0),
       monthlyRevenue: acc.monthlyRevenue + (branch.current_month_revenue || 0),
+      monthlyPending: acc.monthlyPending + (branch.current_month_pending || 0),
       overdueAmount: acc.overdueAmount + (branch.current_month_overdue || 0)
     }),
-    { totalCustomers: 0, totalContracts: 0, monthlyRevenue: 0, overdueAmount: 0 }
+    { totalCustomers: 0, totalContracts: 0, monthlyRevenue: 0, monthlyPending: 0, overdueAmount: 0 }
   ) || {}
+
+  // 計算本期應收、實收、未收
+  const receivable = (stats.monthlyRevenue || 0) + (stats.monthlyPending || 0) + (stats.overdueAmount || 0)
+  const received = stats.monthlyRevenue || 0
+  const outstanding = (stats.monthlyPending || 0) + (stats.overdueAmount || 0)
 
   // 圖表資料
   const chartData = branchRevenue?.map((b) => ({
@@ -44,8 +53,8 @@ export default function Dashboard() {
   })) || []
 
   const pieData = [
-    { name: '已收款', value: stats.monthlyRevenue || 0 },
-    { name: '待收款', value: branchRevenue?.reduce((acc, b) => acc + (b.current_month_pending || 0), 0) || 0 },
+    { name: '已收款', value: received },
+    { name: '待收款', value: stats.monthlyPending || 0 },
     { name: '逾期', value: stats.overdueAmount || 0 }
   ].filter(d => d.value > 0)
 
@@ -60,30 +69,30 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* 統計卡片 */}
+      {/* 財務統計卡片 - 最重要 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="活躍客戶"
-          value={stats.totalCustomers}
-          icon={Users}
+          title="本期應收"
+          value={`$${receivable.toLocaleString()}`}
+          icon={DollarSign}
           iconBg="bg-blue-100"
           iconColor="text-blue-600"
           loading={revenueLoading}
         />
         <StatCard
-          title="有效合約"
-          value={stats.totalContracts}
-          icon={FileText}
+          title="本期實收"
+          value={`$${received.toLocaleString()}`}
+          icon={CheckCircle}
           iconBg="bg-green-100"
           iconColor="text-green-600"
           loading={revenueLoading}
         />
         <StatCard
-          title="本月營收"
-          value={`$${(stats.monthlyRevenue || 0).toLocaleString()}`}
-          icon={TrendingUp}
-          iconBg="bg-purple-100"
-          iconColor="text-purple-600"
+          title="本期未收"
+          value={`$${outstanding.toLocaleString()}`}
+          icon={Clock}
+          iconBg="bg-amber-100"
+          iconColor="text-amber-600"
           loading={revenueLoading}
         />
         <StatCard
@@ -92,6 +101,26 @@ export default function Dashboard() {
           icon={AlertTriangle}
           iconBg="bg-red-100"
           iconColor="text-red-600"
+          loading={revenueLoading}
+        />
+      </div>
+
+      {/* 次要統計 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="活躍客戶"
+          value={stats.totalCustomers}
+          icon={Users}
+          iconBg="bg-slate-100"
+          iconColor="text-slate-600"
+          loading={revenueLoading}
+        />
+        <StatCard
+          title="有效合約"
+          value={stats.totalContracts}
+          icon={FileText}
+          iconBg="bg-slate-100"
+          iconColor="text-slate-600"
           loading={revenueLoading}
         />
       </div>

@@ -93,8 +93,8 @@ export const db = {
   },
 
   // 分館營收
-  async getBranchRevenue() {
-    return api.get('/api/db/v_branch_revenue_summary')
+  async getBranchRevenue(params = {}) {
+    return api.get('/api/db/v_branch_revenue_summary', { params })
   },
 
   // 今日待辦

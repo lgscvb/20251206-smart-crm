@@ -169,9 +169,17 @@ export function useCommissions(params = {}) {
 // ============================================================================
 
 export function useBranchRevenue() {
+  const selectedBranch = useStore((state) => state.selectedBranch)
+
   return useQuery({
-    queryKey: ['branch-revenue'],
-    queryFn: () => db.getBranchRevenue()
+    queryKey: ['branch-revenue', selectedBranch],
+    queryFn: () => {
+      const params = {}
+      if (selectedBranch) {
+        params.branch_id = `eq.${selectedBranch}`
+      }
+      return db.getBranchRevenue(params)
+    }
   })
 }
 
