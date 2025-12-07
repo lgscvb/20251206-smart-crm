@@ -312,3 +312,73 @@ export function useCommissionReport(firmId, status) {
     queryFn: () => reports.getCommissionDue(firmId, status)
   })
 }
+
+// ============================================================================
+// 歷史營收 Hooks (YoY/MoM/QoQ)
+// ============================================================================
+
+export function useMonthlyRevenue(params = {}) {
+  const selectedBranch = useStore((state) => state.selectedBranch)
+
+  return useQuery({
+    queryKey: ['monthly-revenue', params, selectedBranch],
+    queryFn: () => {
+      const queryParams = { order: 'period_start.desc', limit: 24, ...params }
+      if (selectedBranch) {
+        queryParams.branch_id = `eq.${selectedBranch}`
+      }
+      return db.getMonthlyRevenue(queryParams)
+    }
+  })
+}
+
+export function useQuarterlyRevenue(params = {}) {
+  const selectedBranch = useStore((state) => state.selectedBranch)
+
+  return useQuery({
+    queryKey: ['quarterly-revenue', params, selectedBranch],
+    queryFn: () => {
+      const queryParams = { order: 'period_start.desc', limit: 12, ...params }
+      if (selectedBranch) {
+        queryParams.branch_id = `eq.${selectedBranch}`
+      }
+      return db.getQuarterlyRevenue(queryParams)
+    }
+  })
+}
+
+export function useYearlyRevenue(params = {}) {
+  const selectedBranch = useStore((state) => state.selectedBranch)
+
+  return useQuery({
+    queryKey: ['yearly-revenue', params, selectedBranch],
+    queryFn: () => {
+      const queryParams = { order: 'period_start.desc', limit: 5, ...params }
+      if (selectedBranch) {
+        queryParams.branch_id = `eq.${selectedBranch}`
+      }
+      return db.getYearlyRevenue(queryParams)
+    }
+  })
+}
+
+export function useCompanyMonthlyRevenue(params = {}) {
+  return useQuery({
+    queryKey: ['company-monthly-revenue', params],
+    queryFn: () => db.getCompanyMonthlyRevenue({ order: 'period_start.desc', limit: 24, ...params })
+  })
+}
+
+export function useCompanyQuarterlyRevenue(params = {}) {
+  return useQuery({
+    queryKey: ['company-quarterly-revenue', params],
+    queryFn: () => db.getCompanyQuarterlyRevenue({ order: 'period_start.desc', limit: 12, ...params })
+  })
+}
+
+export function useCompanyYearlyRevenue(params = {}) {
+  return useQuery({
+    queryKey: ['company-yearly-revenue', params],
+    queryFn: () => db.getCompanyYearlyRevenue({ order: 'period_start.desc', limit: 5, ...params })
+  })
+}

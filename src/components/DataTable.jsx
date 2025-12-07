@@ -193,7 +193,7 @@ export default function DataTable({
                       key={col.accessor || col.header}
                       className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap"
                     >
-                      {col.cell ? col.cell(row) : row[col.accessor]}
+                      {col.cell ? col.cell(row, (currentPage - 1) * pageSize + rowIndex) : row[col.accessor]}
                     </td>
                   ))}
                 </tr>

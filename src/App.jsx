@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import Customers from './pages/Customers'
 import CustomerDetail from './pages/CustomerDetail'
 import Contracts from './pages/Contracts'
+import ExpiredContracts from './pages/ExpiredContracts'
 import Payments from './pages/Payments'
 import Renewals from './pages/Renewals'
 import Commissions from './pages/Commissions'
@@ -24,6 +25,7 @@ function App() {
         <Route path="customers/churned" element={<ChurnedCustomers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="contracts" element={<Contracts />} />
+        <Route path="contracts/expired" element={<ExpiredContracts />} />
         <Route path="payments" element={<Payments />} />
         <Route path="renewals" element={<Renewals />} />
         <Route path="commissions" element={<Commissions />} />

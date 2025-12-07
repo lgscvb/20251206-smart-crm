@@ -174,6 +174,31 @@ export const db = {
     return api.get('/api/db/branches', {
       params: { status: 'eq.active', order: 'id.asc' }
     })
+  },
+
+  // 歷史營收數據
+  async getMonthlyRevenue(params = {}) {
+    return api.get('/api/db/v_monthly_revenue', { params })
+  },
+
+  async getQuarterlyRevenue(params = {}) {
+    return api.get('/api/db/v_quarterly_revenue', { params })
+  },
+
+  async getYearlyRevenue(params = {}) {
+    return api.get('/api/db/v_yearly_revenue', { params })
+  },
+
+  async getCompanyMonthlyRevenue(params = {}) {
+    return api.get('/api/db/v_company_monthly_revenue', { params })
+  },
+
+  async getCompanyQuarterlyRevenue(params = {}) {
+    return api.get('/api/db/v_company_quarterly_revenue', { params })
+  },
+
+  async getCompanyYearlyRevenue(params = {}) {
+    return api.get('/api/db/v_company_yearly_revenue', { params })
   }
 }
 

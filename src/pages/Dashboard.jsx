@@ -27,22 +27,28 @@ export default function Dashboard() {
   const { data: overdue, isLoading: overdueLoading } = useOverdueDetails()
   const { data: renewals } = useRenewalReminders()
 
-  // 計算統計
+  // 計算統計（金額與筆數）
   const stats = branchRevenue?.reduce(
     (acc, branch) => ({
       totalCustomers: acc.totalCustomers + (branch.active_customers || 0),
       totalContracts: acc.totalContracts + (branch.active_contracts || 0),
       monthlyRevenue: acc.monthlyRevenue + (branch.current_month_revenue || 0),
       monthlyPending: acc.monthlyPending + (branch.current_month_pending || 0),
-      overdueAmount: acc.overdueAmount + (branch.current_month_overdue || 0)
+      overdueAmount: acc.overdueAmount + (branch.current_month_overdue || 0),
+      paidCount: acc.paidCount + (branch.current_month_paid_count || 0),
+      pendingCount: acc.pendingCount + (branch.current_month_pending_count || 0),
+      overdueCount: acc.overdueCount + (branch.current_month_overdue_count || 0)
     }),
-    { totalCustomers: 0, totalContracts: 0, monthlyRevenue: 0, monthlyPending: 0, overdueAmount: 0 }
+    { totalCustomers: 0, totalContracts: 0, monthlyRevenue: 0, monthlyPending: 0, overdueAmount: 0, paidCount: 0, pendingCount: 0, overdueCount: 0 }
   ) || {}
 
-  // 計算本期應收、實收、未收
+  // 計算本期應收、已收、未收（金額與筆數）
   const receivable = (stats.monthlyRevenue || 0) + (stats.monthlyPending || 0) + (stats.overdueAmount || 0)
+  const receivableCount = (stats.paidCount || 0) + (stats.pendingCount || 0) + (stats.overdueCount || 0)
   const received = stats.monthlyRevenue || 0
+  const receivedCount = stats.paidCount || 0
   const outstanding = (stats.monthlyPending || 0) + (stats.overdueAmount || 0)
+  const outstandingCount = (stats.pendingCount || 0) + (stats.overdueCount || 0)
 
   // 圖表資料
   const chartData = branchRevenue?.map((b) => ({
@@ -74,6 +80,7 @@ export default function Dashboard() {
         <StatCard
           title="本期應收"
           value={`$${receivable.toLocaleString()}`}
+          subtitle={`共 ${receivableCount} 筆`}
           icon={DollarSign}
           iconBg="bg-blue-100"
           iconColor="text-blue-600"
@@ -82,6 +89,7 @@ export default function Dashboard() {
         <StatCard
           title="本期已收"
           value={`$${received.toLocaleString()}`}
+          subtitle={`共 ${receivedCount} 筆`}
           icon={CheckCircle}
           iconBg="bg-green-100"
           iconColor="text-green-600"
@@ -90,6 +98,7 @@ export default function Dashboard() {
         <StatCard
           title="本期未收"
           value={`$${outstanding.toLocaleString()}`}
+          subtitle={`共 ${outstandingCount} 筆`}
           icon={Clock}
           iconBg="bg-amber-100"
           iconColor="text-amber-600"
@@ -98,6 +107,7 @@ export default function Dashboard() {
         <StatCard
           title="逾期金額"
           value={`$${(stats.overdueAmount || 0).toLocaleString()}`}
+          subtitle={`共 ${stats.overdueCount || 0} 筆`}
           icon={AlertTriangle}
           iconBg="bg-red-100"
           iconColor="text-red-600"
@@ -111,7 +121,7 @@ export default function Dashboard() {
           <div className="card-header">
             <h3 className="card-title flex items-center gap-2">
               <Bell className="w-5 h-5 text-orange-500" />
-              續約追蹤（60天內到期）
+              續約追蹤（45天內到期）
             </h3>
             <Badge variant="warning">{renewals.length} 份</Badge>
           </div>

@@ -4,6 +4,7 @@ import clsx from 'clsx'
 export default function StatCard({
   title,
   value,
+  subtitle,
   change,
   changeType = 'neutral',
   icon: Icon,
@@ -19,7 +20,12 @@ export default function StatCard({
           {loading ? (
             <div className="h-8 w-24 bg-gray-200 rounded animate-pulse mt-1" />
           ) : (
-            <p className="stat-value mt-1">{value}</p>
+            <>
+              <p className="stat-value mt-1">{value}</p>
+              {subtitle && (
+                <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+              )}
+            </>
           )}
           {change !== undefined && (
             <div className="flex items-center gap-1 mt-2">

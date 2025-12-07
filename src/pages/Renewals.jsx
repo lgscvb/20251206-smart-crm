@@ -18,7 +18,10 @@ import {
   Receipt,
   PenTool,
   ChevronRight,
-  RefreshCw
+  ChevronDown,
+  RefreshCw,
+  Settings2,
+  Edit3
 } from 'lucide-react'
 
 // 續約狀態定義
@@ -26,9 +29,9 @@ const RENEWAL_STATUSES = {
   none: { label: '待處理', color: 'gray', icon: Clock },
   notified: { label: '已通知', color: 'blue', icon: Bell },
   confirmed: { label: '已確認', color: 'purple', icon: CheckCircle },
-  paid: { label: '已收款', color: 'green', icon: Receipt },
+  paid: { label: '已收款', color: 'green', icon: Receipt, hint: '待簽約' },
   invoiced: { label: '已開票', color: 'teal', icon: FileText },
-  signed: { label: '待簽約', color: 'orange', icon: PenTool },
+  signed: { label: '已簽約', color: 'orange', icon: PenTool },
   completed: { label: '完成', color: 'emerald', icon: CheckCircle }
 }
 
@@ -39,13 +42,105 @@ const INVOICE_STATUSES = {
   issued_business: { label: '已開三聯', color: 'green' }
 }
 
+// 可選欄位定義
+const OPTIONAL_COLUMNS = {
+  branch_name: { label: '分館', default: false },
+  contract_number: { label: '合約', default: true },
+  end_date: { label: '到期日', default: true },
+  days_until_expiry: { label: '剩餘', default: true },
+  renewal_status: { label: '續約狀態', default: true },
+  invoice_status: { label: '發票', default: false },
+  monthly_rent: { label: '月租', default: true },
+  period_amount: { label: '當期金額', default: true },
+  line_user_id: { label: 'LINE', default: true }
+}
+
+// 計算當期金額
+const CYCLE_MULTIPLIER = {
+  monthly: 1,
+  quarterly: 3,
+  semi_annual: 6,
+  annual: 12
+}
+const CYCLE_LABEL = {
+  monthly: '月繳',
+  quarterly: '季繳',
+  semi_annual: '半年繳',
+  annual: '年繳'
+}
+// 計算當期金額（支援階梯式收費）
+const getPeriodAmount = (row) => {
+  let monthlyRent = row.monthly_rent || 0
+
+  // 檢查是否有階梯式收費
+  const tieredPricing = row.metadata?.tiered_pricing
+  if (tieredPricing && Array.isArray(tieredPricing) && row.start_date) {
+    // 計算合約開始至今的年數
+    const startDate = new Date(row.start_date)
+    const now = new Date()
+    const yearsElapsed = Math.floor((now - startDate) / (365.25 * 24 * 60 * 60 * 1000)) + 1
+
+    // 找到對應年份的價格
+    const tierForYear = tieredPricing.find(t => t.year === yearsElapsed)
+      || tieredPricing[tieredPricing.length - 1] // 超過最高年份用最後一個價格
+
+    if (tierForYear) {
+      monthlyRent = tierForYear.monthly_rent
+    }
+  }
+
+  const multiplier = CYCLE_MULTIPLIER[row.payment_cycle] || 1
+  return monthlyRent * multiplier
+}
+
+// 取得當前月租（支援階梯式收費）
+const getCurrentMonthlyRent = (row) => {
+  let monthlyRent = row.monthly_rent || 0
+
+  const tieredPricing = row.metadata?.tiered_pricing
+  if (tieredPricing && Array.isArray(tieredPricing) && row.start_date) {
+    const startDate = new Date(row.start_date)
+    const now = new Date()
+    const yearsElapsed = Math.floor((now - startDate) / (365.25 * 24 * 60 * 60 * 1000)) + 1
+
+    const tierForYear = tieredPricing.find(t => t.year === yearsElapsed)
+      || tieredPricing[tieredPricing.length - 1]
+
+    if (tierForYear) {
+      monthlyRent = tierForYear.monthly_rent
+    }
+  }
+
+  return monthlyRent
+}
+
 export default function Renewals() {
   const [showReminderModal, setShowReminderModal] = useState(false)
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [selectedContract, setSelectedContract] = useState(null)
   const [statusFilter, setStatusFilter] = useState('all')
   const [branchFilter, setBranchFilter] = useState('')
+  const [renewalNotes, setRenewalNotes] = useState('')
+  const [pageSize, setPageSize] = useState(15)
+  const [showColumnPicker, setShowColumnPicker] = useState(false)
+  const [reminderText, setReminderText] = useState('')
   const queryClient = useQueryClient()
+
+  // 初始化欄位顯示狀態
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    const initial = {}
+    Object.entries(OPTIONAL_COLUMNS).forEach(([key, { default: def }]) => {
+      initial[key] = def
+    })
+    return initial
+  })
+
+  const toggleColumn = (key) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }))
+  }
 
   const { data: renewals, isLoading, refetch } = useRenewalReminders()
   const { data: branches } = useBranches()
@@ -117,10 +212,22 @@ export default function Renewals() {
     (r) => r.days_until_expiry > 7 && r.days_until_expiry <= 30
   )
 
-  const columns = [
+  // 所有欄位定義
+  const allColumns = [
     {
+      key: '_index',
+      header: '#',
+      accessor: '_index',
+      fixed: true,
+      cell: (row, index) => (
+        <span className="text-gray-500 font-mono text-sm">{index + 1}</span>
+      )
+    },
+    {
+      key: 'customer_name',
       header: '客戶',
       accessor: 'customer_name',
+      fixed: true,
       cell: (row) => (
         <div>
           <p className="font-medium">{row.customer_name}</p>
@@ -131,10 +238,12 @@ export default function Renewals() {
       )
     },
     {
+      key: 'branch_name',
       header: '分館',
       accessor: 'branch_name'
     },
     {
+      key: 'contract_number',
       header: '合約',
       accessor: 'contract_number',
       cell: (row) => (
@@ -142,6 +251,7 @@ export default function Renewals() {
       )
     },
     {
+      key: 'end_date',
       header: '到期日',
       accessor: 'end_date',
       cell: (row) => (
@@ -152,6 +262,7 @@ export default function Renewals() {
       )
     },
     {
+      key: 'days_until_expiry',
       header: '剩餘',
       accessor: 'days_until_expiry',
       cell: (row) => {
@@ -170,6 +281,7 @@ export default function Renewals() {
       }
     },
     {
+      key: 'renewal_status',
       header: '續約狀態',
       accessor: 'renewal_status',
       cell: (row) => {
@@ -182,6 +294,7 @@ export default function Renewals() {
             onClick={(e) => {
               e.stopPropagation()
               setSelectedContract(row)
+              setRenewalNotes(row.renewal_notes || '')
               setShowStatusModal(true)
             }}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors hover:opacity-80 bg-${statusInfo?.color}-100 text-${statusInfo?.color}-700`}
@@ -194,6 +307,7 @@ export default function Renewals() {
       }
     },
     {
+      key: 'invoice_status',
       header: '發票',
       accessor: 'invoice_status',
       cell: (row) => {
@@ -207,6 +321,7 @@ export default function Renewals() {
       }
     },
     {
+      key: 'monthly_rent',
       header: '月租',
       accessor: 'monthly_rent',
       cell: (row) => (
@@ -214,6 +329,26 @@ export default function Renewals() {
       )
     },
     {
+      key: 'period_amount',
+      header: '當期金額',
+      accessor: 'period_amount',
+      cell: (row) => {
+        const periodAmount = getPeriodAmount(row)
+        const cycleLabel = CYCLE_LABEL[row.payment_cycle] || row.payment_cycle
+        return (
+          <div className="text-sm">
+            <span className="font-medium text-blue-600">
+              ${periodAmount.toLocaleString()}
+            </span>
+            <span className="text-gray-400 text-xs ml-1">
+              ({cycleLabel})
+            </span>
+          </div>
+        )
+      }
+    },
+    {
+      key: 'line_user_id',
       header: 'LINE',
       accessor: 'line_user_id',
       cell: (row) =>
@@ -224,7 +359,9 @@ export default function Renewals() {
         )
     },
     {
+      key: 'actions',
       header: '操作',
+      fixed: true,
       sortable: false,
       cell: (row) => (
         <div className="flex items-center gap-2">
@@ -233,6 +370,10 @@ export default function Renewals() {
               onClick={(e) => {
                 e.stopPropagation()
                 setSelectedContract(row)
+                // 設定預設提醒文字
+                const periodAmount = getPeriodAmount(row)
+                const cycleLabel = CYCLE_LABEL[row.payment_cycle] || ''
+                setReminderText(`您好，提醒您合約 ${row.contract_number} 將於 ${row.end_date} 到期，續約金額為 $${periodAmount.toLocaleString()}（${cycleLabel}），請問是否需要續約？`)
                 setShowReminderModal(true)
               }}
               className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
@@ -245,6 +386,7 @@ export default function Renewals() {
             onClick={(e) => {
               e.stopPropagation()
               setSelectedContract(row)
+              setRenewalNotes(row.renewal_notes || '')
               setShowStatusModal(true)
             }}
             className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
@@ -256,6 +398,11 @@ export default function Renewals() {
       )
     }
   ]
+
+  // 根據顯示狀態過濾欄位
+  const columns = allColumns.filter(col =>
+    col.fixed || visibleColumns[col.key]
+  )
 
   return (
     <div className="space-y-6">
@@ -319,6 +466,56 @@ export default function Renewals() {
           </select>
         </div>
 
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">每頁：</label>
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            className="input w-20"
+          >
+            <option value={15}>15</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
+
+        {/* 欄位選擇器 */}
+        <div className="relative">
+          <button
+            onClick={() => setShowColumnPicker(!showColumnPicker)}
+            className="btn-secondary text-sm"
+          >
+            <Settings2 className="w-4 h-4 mr-1" />
+            欄位
+            <ChevronDown className="w-4 h-4 ml-1" />
+          </button>
+
+          {showColumnPicker && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setShowColumnPicker(false)}
+              />
+              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 p-2 min-w-[140px]">
+                {Object.entries(OPTIONAL_COLUMNS).map(([key, { label }]) => (
+                  <label
+                    key={key}
+                    className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={visibleColumns[key]}
+                      onChange={() => toggleColumn(key)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-gray-700">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
         {statusFilter !== 'all' && (
           <button
             onClick={() => setStatusFilter('all')}
@@ -367,13 +564,21 @@ export default function Renewals() {
                 <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
                   <div>
                     <p className="text-xs text-gray-500">到期日：{item.end_date}</p>
-                    <p className="text-sm font-medium">${(item.monthly_rent || 0).toLocaleString()}/月</p>
+                    <p className="text-sm font-medium text-blue-600">
+                      ${getPeriodAmount(item).toLocaleString()}
+                      <span className="text-gray-400 text-xs ml-1">
+                        ({CYCLE_LABEL[item.payment_cycle] || '月繳'})
+                      </span>
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     {item.line_user_id && (
                       <button
                         onClick={() => {
                           setSelectedContract(item)
+                          const periodAmount = getPeriodAmount(item)
+                          const cycleLabel = CYCLE_LABEL[item.payment_cycle] || ''
+                          setReminderText(`您好，提醒您合約 ${item.contract_number} 將於 ${item.end_date} 到期，續約金額為 $${periodAmount.toLocaleString()}（${cycleLabel}），請問是否需要續約？`)
                           setShowReminderModal(true)
                         }}
                         className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
@@ -385,6 +590,7 @@ export default function Renewals() {
                     <button
                       onClick={() => {
                         setSelectedContract(item)
+                        setRenewalNotes(item.renewal_notes || '')
                         setShowStatusModal(true)
                       }}
                       className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
@@ -406,8 +612,8 @@ export default function Renewals() {
         data={filteredRenewals}
         loading={isLoading}
         onRefresh={refetch}
-        pageSize={15}
-        emptyMessage="🎉 沒有符合條件的續約提醒"
+        pageSize={pageSize}
+        emptyMessage="沒有符合條件的續約提醒"
       />
 
       {/* 發送提醒 Modal */}
@@ -416,20 +622,24 @@ export default function Renewals() {
         onClose={() => {
           setShowReminderModal(false)
           setSelectedContract(null)
+          setReminderText('')
         }}
         title="發送 LINE 續約提醒"
-        size="sm"
+        size="md"
         footer={
           <>
             <button
-              onClick={() => setShowReminderModal(false)}
+              onClick={() => {
+                setShowReminderModal(false)
+                setReminderText('')
+              }}
               className="btn-secondary"
             >
               取消
             </button>
             <button
               onClick={handleSendReminder}
-              disabled={sendReminder.isPending}
+              disabled={sendReminder.isPending || !reminderText.trim()}
               className="btn-primary"
             >
               <Send className="w-4 h-4 mr-2" />
@@ -447,15 +657,54 @@ export default function Renewals() {
               </p>
               <div className="flex items-center gap-4 mt-2">
                 <Badge variant={selectedContract.days_until_expiry <= 7 ? 'danger' : 'warning'}>
-                  剩餘 {selectedContract.days_until_expiry} 天
+                  {selectedContract.days_until_expiry <= 0
+                    ? `已過期 ${Math.abs(selectedContract.days_until_expiry)} 天`
+                    : `剩餘 ${selectedContract.days_until_expiry} 天`}
                 </Badge>
                 <span className="text-sm text-gray-500">
                   到期日：{selectedContract.end_date}
                 </span>
               </div>
+              <div className="mt-2 pt-2 border-t border-blue-200">
+                <p className="text-sm text-blue-700 font-medium">
+                  當期金額：${getPeriodAmount(selectedContract).toLocaleString()}
+                  <span className="text-blue-500 text-xs ml-1">
+                    ({CYCLE_LABEL[selectedContract.payment_cycle] || '月繳'})
+                  </span>
+                </p>
+              </div>
             </div>
 
-            <div className="p-4 bg-gray-50 rounded-lg">
+            {/* 提醒文字編輯區 */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                  <Edit3 className="w-4 h-4" />
+                  提醒訊息內容
+                </label>
+                <button
+                  onClick={() => {
+                    const periodAmount = getPeriodAmount(selectedContract)
+                    const cycleLabel = CYCLE_LABEL[selectedContract.payment_cycle] || ''
+                    setReminderText(`您好，提醒您合約 ${selectedContract.contract_number} 將於 ${selectedContract.end_date} 到期，續約金額為 $${periodAmount.toLocaleString()}（${cycleLabel}），請問是否需要續約？`)
+                  }}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  重置為預設
+                </button>
+              </div>
+              <textarea
+                value={reminderText}
+                onChange={(e) => setReminderText(e.target.value)}
+                placeholder="輸入要發送的提醒訊息..."
+                className="input w-full h-32 resize-none"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                字數：{reminderText.length}
+              </p>
+            </div>
+
+            <div className="p-3 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-500">發送後將自動更新狀態為「已通知」</p>
             </div>
           </div>
@@ -583,15 +832,29 @@ export default function Renewals() {
               </div>
             )}
 
-            {/* 備註 */}
-            {selectedContract.renewal_notes && (
-              <div>
-                <h4 className="font-medium mb-2">備註</h4>
-                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                  {selectedContract.renewal_notes}
-                </p>
-              </div>
-            )}
+            {/* 備註編輯 */}
+            <div>
+              <h4 className="font-medium mb-2">備註（如：新合約金額、特殊條件）</h4>
+              <textarea
+                value={renewalNotes}
+                onChange={(e) => setRenewalNotes(e.target.value)}
+                placeholder="例：新合約 $1,800/月 年繳，已匯款，待回傳簽約"
+                className="input w-full h-20 resize-none"
+              />
+              <button
+                onClick={() => {
+                  updateStatus.mutate({
+                    contractId: selectedContract.id,
+                    status: selectedContract.renewal_status || 'none',
+                    notes: renewalNotes
+                  })
+                }}
+                disabled={updateStatus.isPending || renewalNotes === (selectedContract.renewal_notes || '')}
+                className="btn-secondary text-sm mt-2"
+              >
+                儲存備註
+              </button>
+            </div>
           </div>
         )}
       </Modal>
