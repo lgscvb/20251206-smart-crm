@@ -19,6 +19,42 @@ import {
 import { aiChatStream, getAIModels } from '../services/api'
 import { useQuery } from '@tanstack/react-query'
 
+// localStorage 存儲 key
+const CHAT_STORAGE_KEY = 'ai-assistant-chat-history'
+
+// 預設歡迎訊息
+const DEFAULT_MESSAGE = {
+  role: 'assistant',
+  content: '你好！我是 Hour Jungle CRM 助手。我可以幫你查詢客戶資料、繳費狀況、合約到期提醒等。有什麼可以幫你的嗎？'
+}
+
+// 從 localStorage 載入聊天記錄
+const loadChatHistory = () => {
+  try {
+    const saved = localStorage.getItem(CHAT_STORAGE_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+      }
+    }
+  } catch (e) {
+    console.error('載入聊天記錄失敗:', e)
+  }
+  return [DEFAULT_MESSAGE]
+}
+
+// 儲存聊天記錄到 localStorage
+const saveChatHistory = (messages) => {
+  try {
+    // 限制最多保存 50 條訊息，避免 localStorage 超過容量
+    const toSave = messages.slice(-50)
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(toSave))
+  } catch (e) {
+    console.error('儲存聊天記錄失敗:', e)
+  }
+}
+
 // 預設問題範例
 const QUICK_PROMPTS = [
   { icon: Users, label: '查詢客戶', prompt: '幫我查詢客戶資料' },
@@ -28,12 +64,7 @@ const QUICK_PROMPTS = [
 ]
 
 export default function AIAssistant() {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: '你好！我是 Hour Jungle CRM 助手。我可以幫你查詢客戶資料、繳費狀況、合約到期提醒等。有什麼可以幫你的嗎？'
-    }
-  ])
+  const [messages, setMessages] = useState(loadChatHistory)
   const [input, setInput] = useState('')
   const [copied, setCopied] = useState(null)
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4')
@@ -58,6 +89,11 @@ export default function AIAssistant() {
   useEffect(() => {
     scrollToBottom()
   }, [messages, streamingContent])
+
+  // 儲存聊天記錄到 localStorage
+  useEffect(() => {
+    saveChatHistory(messages)
+  }, [messages])
 
   // 發送訊息（使用串流）
   const handleSend = useCallback(async () => {
@@ -160,7 +196,10 @@ export default function AIAssistant() {
             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
           </div>
           <button
-            onClick={() => setMessages([messages[0]])}
+            onClick={() => {
+              setMessages([DEFAULT_MESSAGE])
+              localStorage.removeItem(CHAT_STORAGE_KEY)
+            }}
             className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
           >
             <RefreshCw className="w-4 h-4" />
