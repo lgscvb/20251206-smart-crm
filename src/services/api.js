@@ -1,6 +1,17 @@
 import axios from 'axios'
 
+// ⚠️ 重要：雙層 /api/ 抵消設計 ⚠️
 // 開發環境使用 /proxy，正式環境使用 /api（由 nginx 反向代理）
+//
+// 正式環境路徑組合：
+//   baseURL: /api
+//   + 路徑: /api/db/xxx (下面的 db.getXxx 等方法)
+//   = 實際發出: /api/api/db/xxx
+//   → Nginx trailing slash 剝掉第一層 /api/
+//   → 後端收到: /api/db/xxx (正確)
+//
+// 請勿隨意修改路徑前綴，會導致 API 404！
+// 同步修改需一併調整 nginx.conf
 const isDev = import.meta.env.DEV
 const API_BASE = isDev ? '/proxy' : '/api'
 
