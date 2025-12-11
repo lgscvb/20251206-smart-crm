@@ -169,6 +169,20 @@ export const db = {
     return ensureArray(data)
   },
 
+  async getPaymentsHistory(params = {}) {
+    // 查詢已付款記錄（用於撤銷功能）
+    const data = await api.get('/api/db/payments', {
+      params: {
+        payment_status: 'eq.paid',
+        select: 'id,customer_id,branch_id,payment_period,amount,due_date,paid_at,payment_method,reference,notes,customer:customers(name,company_name),branch:branches(name)',
+        order: 'paid_at.desc',
+        limit: 50,
+        ...params
+      }
+    })
+    return ensureArray(data)
+  },
+
   // 續約提醒
   async getRenewalReminders(params = {}) {
     const data = await api.get('/api/db/v_renewal_reminders', { params })
@@ -317,8 +331,23 @@ export const crm = {
     })
   },
 
+  async undoPayment(paymentId, reason) {
+    return callTool('crm_payment_undo', {
+      payment_id: paymentId,
+      reason
+    })
+  },
+
   async createContract(data) {
     return callTool('crm_create_contract', data)
+  },
+
+  async generateContractPdf(contractId) {
+    return callTool('contract_generate_pdf', { contract_id: contractId })
+  },
+
+  async generateQuotePdf(quoteId) {
+    return callTool('quote_generate_pdf', { quote_id: quoteId })
   }
 }
 
@@ -404,6 +433,108 @@ export const reports = {
         items
       }
     }
+  }
+}
+
+// ============================================================================
+// Settings API
+// ============================================================================
+
+export const settings = {
+  async getAll() {
+    // 直接從資料庫取得所有設定
+    const data = await api.get('/api/db/system_settings', { params: { order: 'key' } })
+    const result = {}
+    const items = ensureArray(data)
+    items.forEach(item => {
+      result[item.key] = item.value
+    })
+    return result
+  },
+
+  async get(key) {
+    const data = await api.get('/api/db/system_settings', {
+      params: { key: `eq.${key}` }
+    })
+    const items = ensureArray(data)
+    return items.length > 0 ? items[0].value : null
+  },
+
+  async update(key, value) {
+    // 使用 UPSERT (需要 PostgREST 設定)
+    const data = await api.patch('/api/db/system_settings', { value }, {
+      params: { key: `eq.${key}` },
+      headers: { 'Prefer': 'return=representation' }
+    })
+    return ensureArray(data)[0]
+  }
+}
+
+// ============================================================================
+// Legal Letter API (存證信函)
+// ============================================================================
+
+export const legalLetter = {
+  // 列出候選客戶（逾期>14天且催繳>=5次）
+  async getCandidates(branchId, limit = 50) {
+    const params = { limit, order: 'days_overdue.desc' }
+    if (branchId) params.branch_id = `eq.${branchId}`
+    const data = await api.get('/api/db/v_legal_letter_candidates', { params })
+    return ensureArray(data)
+  },
+
+  // 列出待處理存證信函
+  async getPending(branchId, status, limit = 50) {
+    const params = { limit, order: 'created_at.desc' }
+    if (branchId) params.branch_id = `eq.${branchId}`
+    if (status) params.status = `eq.${status}`
+    const data = await api.get('/api/db/v_pending_legal_letters', { params })
+    return ensureArray(data)
+  },
+
+  // 記錄催繳
+  async recordReminder(paymentId, notes) {
+    return callTool('legal_record_reminder', { payment_id: paymentId, notes })
+  },
+
+  // 生成存證信函內容 (AI)
+  async generateContent(params) {
+    return callTool('legal_generate_content', params)
+  },
+
+  // 建立存證信函
+  async create(paymentId, content, recipientName, recipientAddress) {
+    return callTool('legal_create_letter', {
+      payment_id: paymentId,
+      content,
+      recipient_name: recipientName,
+      recipient_address: recipientAddress
+    })
+  },
+
+  // 生成 PDF
+  async generatePdf(letterId) {
+    return callTool('legal_generate_pdf', { letter_id: letterId })
+  },
+
+  // 發送通知
+  async notifyStaff(letterId, staffLineId, message) {
+    return callTool('legal_notify_staff', {
+      letter_id: letterId,
+      staff_line_id: staffLineId,
+      message
+    })
+  },
+
+  // 更新狀態
+  async updateStatus(letterId, status, approvedBy, trackingNumber, notes) {
+    return callTool('legal_update_status', {
+      letter_id: letterId,
+      status,
+      approved_by: approvedBy,
+      tracking_number: trackingNumber,
+      notes
+    })
   }
 }
 

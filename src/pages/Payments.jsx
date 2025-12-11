@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { usePaymentsDue, useOverdueDetails, useRecordPayment, useSendPaymentReminder } from '../hooks/useApi'
+import { useNavigate } from 'react-router-dom'
+import { usePaymentsDue, useOverdueDetails, usePaymentsHistory, useRecordPayment, useUndoPayment, useSendPaymentReminder } from '../hooks/useApi'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import Badge, { StatusBadge } from '../components/Badge'
@@ -13,7 +14,10 @@ import {
   Phone,
   MessageSquare,
   Settings2,
-  ChevronDown
+  ChevronDown,
+  Undo2,
+  History,
+  Scale
 } from 'lucide-react'
 
 // 應收款可選欄位
@@ -32,20 +36,33 @@ const OVERDUE_COLUMNS = {
   payment_period: { label: '期別', default: true },
   total_due: { label: '應繳', default: true },
   days_overdue: { label: '逾期天數', default: true },
+  reminder_count: { label: '催繳次數', default: true },
   overdue_level: { label: '嚴重度', default: true },
   phone: { label: '聯絡', default: false }
 }
 
+// 已付款可選欄位
+const PAID_COLUMNS = {
+  branch_name: { label: '分館', default: false },
+  payment_period: { label: '期別', default: true },
+  amount: { label: '金額', default: true },
+  paid_at: { label: '付款日', default: true },
+  payment_method: { label: '付款方式', default: true }
+}
+
 export default function Payments() {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('due')
   const [showPayModal, setShowPayModal] = useState(false)
   const [showReminderModal, setShowReminderModal] = useState(false)
+  const [showUndoModal, setShowUndoModal] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [paymentForm, setPaymentForm] = useState({
     payment_method: 'transfer',
     reference: '',
     paid_at: new Date().toISOString().split('T')[0]
   })
+  const [undoReason, setUndoReason] = useState('')
   const [reminderMessage, setReminderMessage] = useState('')
   const [pageSize, setPageSize] = useState(15)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
@@ -68,9 +85,20 @@ export default function Payments() {
     return initial
   })
 
+  // 已付款欄位狀態
+  const [paidVisibleColumns, setPaidVisibleColumns] = useState(() => {
+    const initial = {}
+    Object.entries(PAID_COLUMNS).forEach(([key, { default: def }]) => {
+      initial[key] = def
+    })
+    return initial
+  })
+
   const { data: paymentsDue, isLoading: dueLoading, refetch: refetchDue } = usePaymentsDue()
   const { data: overdueList, isLoading: overdueLoading, refetch: refetchOverdue } = useOverdueDetails()
+  const { data: paidList, isLoading: paidLoading, refetch: refetchPaid } = usePaymentsHistory()
   const recordPayment = useRecordPayment()
+  const undoPayment = useUndoPayment()
   const sendReminder = useSendPaymentReminder()
 
   const handleRecordPayment = async () => {
@@ -101,6 +129,19 @@ export default function Payments() {
     })
     setShowReminderModal(false)
     setSelectedPayment(null)
+  }
+
+  const handleUndoPayment = async () => {
+    if (!selectedPayment || !undoReason.trim()) return
+    await undoPayment.mutateAsync({
+      paymentId: selectedPayment.id,
+      reason: undoReason.trim()
+    })
+    setShowUndoModal(false)
+    setSelectedPayment(null)
+    setUndoReason('')
+    refetchPaid()
+    refetchDue()
   }
 
   // 應收款所有欄位定義
@@ -252,6 +293,16 @@ export default function Payments() {
       )
     },
     {
+      key: 'reminder_count',
+      header: '催繳次數',
+      accessor: 'reminder_count',
+      cell: (row) => (
+        <Badge variant={row.reminder_count >= 5 ? 'danger' : row.reminder_count >= 3 ? 'warning' : 'info'}>
+          {row.reminder_count || 0} 次
+        </Badge>
+      )
+    },
+    {
       key: 'overdue_level',
       header: '嚴重度',
       accessor: 'overdue_level',
@@ -316,6 +367,88 @@ export default function Payments() {
     }
   ]
 
+  // 已付款所有欄位定義
+  const allPaidColumns = [
+    {
+      key: '_index',
+      header: '#',
+      accessor: '_index',
+      fixed: true,
+      cell: (row, index) => (
+        <span className="text-gray-500 font-mono text-sm">{index + 1}</span>
+      )
+    },
+    {
+      key: 'customer_name',
+      header: '客戶',
+      accessor: 'customer_name',
+      fixed: true,
+      cell: (row) => (
+        <div>
+          <p className="font-medium">{row.customer?.name || '-'}</p>
+          {row.customer?.company_name && (
+            <p className="text-xs text-gray-500">{row.customer.company_name}</p>
+          )}
+        </div>
+      )
+    },
+    { key: 'branch_name', header: '分館', accessor: 'branch_name', cell: (row) => row.branch?.name || '-' },
+    { key: 'payment_period', header: '期別', accessor: 'payment_period' },
+    {
+      key: 'amount',
+      header: '金額',
+      accessor: 'amount',
+      cell: (row) => (
+        <span className="font-semibold text-green-600">${(row.amount || 0).toLocaleString()}</span>
+      )
+    },
+    {
+      key: 'paid_at',
+      header: '付款日',
+      accessor: 'paid_at',
+      cell: (row) => (
+        <div className="flex items-center gap-1">
+          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+          {row.paid_at ? row.paid_at.split('T')[0] : '-'}
+        </div>
+      )
+    },
+    {
+      key: 'payment_method',
+      header: '付款方式',
+      accessor: 'payment_method',
+      cell: (row) => {
+        const methods = {
+          transfer: '銀行轉帳',
+          cash: '現金',
+          check: '支票',
+          credit_card: '信用卡',
+          line_pay: 'LINE Pay'
+        }
+        return methods[row.payment_method] || row.payment_method || '-'
+      }
+    },
+    {
+      key: 'actions',
+      header: '操作',
+      sortable: false,
+      fixed: true,
+      cell: (row) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setSelectedPayment(row)
+            setShowUndoModal(true)
+          }}
+          className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+          title="撤銷繳費"
+        >
+          <Undo2 className="w-4 h-4" />
+        </button>
+      )
+    }
+  ]
+
   // 根據顯示狀態過濾欄位
   const dueColumns = allDueColumns.filter(col =>
     col.fixed || dueVisibleColumns[col.key]
@@ -323,6 +456,10 @@ export default function Payments() {
 
   const overdueColumns = allOverdueColumns.filter(col =>
     col.fixed || overdueVisibleColumns[col.key]
+  )
+
+  const paidColumns = allPaidColumns.filter(col =>
+    col.fixed || paidVisibleColumns[col.key]
   )
 
   const toggleDueColumn = (key) => {
@@ -339,17 +476,27 @@ export default function Payments() {
     }))
   }
 
+  const togglePaidColumn = (key) => {
+    setPaidVisibleColumns(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }))
+  }
+
   // 統計
   const paymentsDueArr = Array.isArray(paymentsDue) ? paymentsDue : []
   const overdueListArr = Array.isArray(overdueList) ? overdueList : []
+  const paidListArr = Array.isArray(paidList) ? paidList : []
   const pendingCount = paymentsDueArr.filter((p) => p.payment_status === 'pending').length
   const overdueCount = overdueListArr.length
   const totalOverdue = overdueListArr.reduce((sum, p) => sum + (p.total_due || 0), 0)
+  const paidCount = paidListArr.length
+  const totalPaid = paidListArr.reduce((sum, p) => sum + (p.amount || 0), 0)
 
   // 當前使用的欄位配置
-  const currentOptionalColumns = activeTab === 'due' ? DUE_COLUMNS : OVERDUE_COLUMNS
-  const currentVisibleColumns = activeTab === 'due' ? dueVisibleColumns : overdueVisibleColumns
-  const toggleColumn = activeTab === 'due' ? toggleDueColumn : toggleOverdueColumn
+  const currentOptionalColumns = activeTab === 'due' ? DUE_COLUMNS : activeTab === 'overdue' ? OVERDUE_COLUMNS : PAID_COLUMNS
+  const currentVisibleColumns = activeTab === 'due' ? dueVisibleColumns : activeTab === 'overdue' ? overdueVisibleColumns : paidVisibleColumns
+  const toggleColumn = activeTab === 'due' ? toggleDueColumn : activeTab === 'overdue' ? toggleOverdueColumn : togglePaidColumn
 
   return (
     <div className="space-y-6">
@@ -413,13 +560,26 @@ export default function Payments() {
                 <Badge variant="danger">{overdueCount}</Badge>
               )}
             </button>
+            <button
+              onClick={() => setActiveTab('paid')}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                activeTab === 'paid'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <History className="w-4 h-4" />
+              已付款記錄
+            </button>
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">每頁：</label>
+            <label htmlFor="payment-page-size" className="text-sm text-gray-600">每頁：</label>
             <select
+              id="payment-page-size"
+              name="page-size"
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
               className="input w-20"
@@ -466,11 +626,19 @@ export default function Payments() {
               </>
             )}
           </div>
+
+          <button
+            onClick={() => navigate('/payments/legal-letters')}
+            className="btn-secondary"
+          >
+            <Scale className="w-4 h-4 mr-2" />
+            存證信函
+          </button>
         </div>
       </div>
 
       {/* 資料表 */}
-      {activeTab === 'due' ? (
+      {activeTab === 'due' && (
         <DataTable
           columns={dueColumns}
           data={paymentsDue || []}
@@ -479,7 +647,8 @@ export default function Payments() {
           pageSize={pageSize}
           emptyMessage="沒有待收款項"
         />
-      ) : (
+      )}
+      {activeTab === 'overdue' && (
         <DataTable
           columns={overdueColumns}
           data={overdueList || []}
@@ -487,6 +656,16 @@ export default function Payments() {
           onRefresh={refetchOverdue}
           pageSize={pageSize}
           emptyMessage="沒有逾期款項"
+        />
+      )}
+      {activeTab === 'paid' && (
+        <DataTable
+          columns={paidColumns}
+          data={paidList || []}
+          loading={paidLoading}
+          onRefresh={refetchPaid}
+          pageSize={pageSize}
+          emptyMessage="沒有已付款記錄"
         />
       )}
 
@@ -532,8 +711,10 @@ export default function Payments() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="label">繳費日期</label>
+                <label htmlFor="payment-date" className="label">繳費日期</label>
                 <input
+                  id="payment-date"
+                  name="paid_at"
                   type="date"
                   value={paymentForm.paid_at}
                   onChange={(e) =>
@@ -543,8 +724,10 @@ export default function Payments() {
                 />
               </div>
               <div>
-                <label className="label">付款方式</label>
+                <label htmlFor="payment-method" className="label">付款方式</label>
                 <select
+                  id="payment-method"
+                  name="payment_method"
                   value={paymentForm.payment_method}
                   onChange={(e) =>
                     setPaymentForm({ ...paymentForm, payment_method: e.target.value })
@@ -560,8 +743,10 @@ export default function Payments() {
             </div>
 
             <div>
-              <label className="label">備註 / 匯款帳號後五碼</label>
+              <label htmlFor="payment-reference" className="label">備註 / 匯款帳號後五碼</label>
               <input
+                id="payment-reference"
+                name="reference"
                 type="text"
                 value={paymentForm.reference}
                 onChange={(e) =>
@@ -613,8 +798,10 @@ export default function Payments() {
             </div>
 
             <div>
-              <label className="label">訊息內容</label>
+              <label htmlFor="reminder-message" className="label">訊息內容</label>
               <textarea
+                id="reminder-message"
+                name="reminder_message"
                 value={reminderMessage}
                 onChange={(e) => setReminderMessage(e.target.value)}
                 rows={4}
@@ -622,6 +809,78 @@ export default function Payments() {
                 placeholder="輸入要發送的訊息..."
               />
               <p className="text-xs text-gray-400 mt-1">可編輯訊息內容後再發送</p>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 撤銷繳費 Modal */}
+      <Modal
+        open={showUndoModal}
+        onClose={() => {
+          setShowUndoModal(false)
+          setSelectedPayment(null)
+          setUndoReason('')
+        }}
+        title="撤銷繳費記錄"
+        size="sm"
+        footer={
+          <>
+            <button
+              onClick={() => {
+                setShowUndoModal(false)
+                setSelectedPayment(null)
+                setUndoReason('')
+              }}
+              className="btn-secondary"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleUndoPayment}
+              disabled={undoPayment.isPending || !undoReason.trim()}
+              className="btn-danger"
+            >
+              <Undo2 className="w-4 h-4 mr-2" />
+              {undoPayment.isPending ? '處理中...' : '確認撤銷'}
+            </button>
+          </>
+        }
+      >
+        {selectedPayment && (
+          <div className="space-y-4">
+            <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+              <p className="font-medium">{selectedPayment.customer?.name || '-'}</p>
+              <p className="text-sm text-gray-500">
+                {selectedPayment.payment_period} · {selectedPayment.branch?.name || '-'}
+              </p>
+              <p className="text-xl font-bold text-green-600 mt-2">
+                ${(selectedPayment.amount || 0).toLocaleString()}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                付款日期：{selectedPayment.paid_at ? selectedPayment.paid_at.split('T')[0] : '-'}
+              </p>
+            </div>
+
+            <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+              <p className="text-sm text-red-700">
+                <strong>警告：</strong>撤銷後此筆繳費將回到「待收款」狀態，原付款資訊將被記錄在備註中。
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="undo-reason" className="label">
+                撤銷原因 <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                id="undo-reason"
+                name="undo_reason"
+                value={undoReason}
+                onChange={(e) => setUndoReason(e.target.value)}
+                rows={3}
+                className="input resize-none"
+                placeholder="請說明撤銷繳費的原因..."
+              />
             </div>
           </div>
         )}

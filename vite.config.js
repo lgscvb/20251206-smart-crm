@@ -7,9 +7,9 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/proxy': {
-        target: 'https://auto.yourspce.org',
+        target: 'http://34.83.87.103',
         changeOrigin: true,
-        secure: false,  // 允許自簽憑證
+        secure: false,
         rewrite: (path) => path.replace(/^\/proxy/, '')
       }
     }

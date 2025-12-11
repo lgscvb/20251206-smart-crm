@@ -1,5 +1,8 @@
 import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCommissions } from '../hooks/useApi'
+import { callTool } from '../services/api'
+import useStore from '../store/useStore'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import Badge, { StatusBadge } from '../components/Badge'
@@ -10,17 +13,66 @@ import {
   Building2,
   Calendar,
   CreditCard,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react'
 
 export default function Commissions() {
   const [statusFilter, setStatusFilter] = useState('')
   const [showPayModal, setShowPayModal] = useState(false)
   const [selectedCommission, setSelectedCommission] = useState(null)
+  const [paymentForm, setPaymentForm] = useState({
+    payment_method: 'transfer',
+    reference: ''
+  })
+
+  const queryClient = useQueryClient()
+  const addNotification = useStore((state) => state.addNotification)
 
   const { data: commissions, isLoading, refetch } = useCommissions({
     ...(statusFilter && { commission_status: `eq.${statusFilter}` })
   })
+
+  // 佣金付款 mutation
+  const payCommission = useMutation({
+    mutationFn: async ({ commissionId, paymentMethod, reference }) => {
+      return callTool('commission_pay', {
+        commission_id: commissionId,
+        payment_method: paymentMethod,
+        reference: reference || null
+      })
+    },
+    onSuccess: (data) => {
+      if (data.success) {
+        queryClient.invalidateQueries({ queryKey: ['commissions'] })
+        addNotification({ type: 'success', message: '佣金付款成功' })
+        setShowPayModal(false)
+        setSelectedCommission(null)
+        setPaymentForm({ payment_method: 'transfer', reference: '' })
+      } else {
+        addNotification({ type: 'error', message: data.message || '付款失敗' })
+      }
+    },
+    onError: (error) => {
+      addNotification({ type: 'error', message: `付款失敗: ${error.message}` })
+    }
+  })
+
+  const handlePayCommission = () => {
+    if (!selectedCommission) return
+
+    // 驗證
+    if (paymentForm.payment_method === 'transfer' && !paymentForm.reference) {
+      addNotification({ type: 'error', message: '請輸入轉帳帳號後五碼' })
+      return
+    }
+
+    payCommission.mutate({
+      commissionId: selectedCommission.id,
+      paymentMethod: paymentForm.payment_method,
+      reference: paymentForm.reference
+    })
+  }
 
   // 統計
   const commissionsArr = Array.isArray(commissions) ? commissions : []
@@ -229,8 +281,10 @@ export default function Commissions() {
       {/* 篩選 */}
       <div className="card">
         <div className="flex items-center gap-4">
-          <label className="text-sm text-gray-600">狀態：</label>
+          <label htmlFor="commission-status-filter" className="text-sm text-gray-600">狀態：</label>
           <select
+            id="commission-status-filter"
+            name="commission-status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="input w-32"
@@ -259,27 +313,39 @@ export default function Commissions() {
         onClose={() => {
           setShowPayModal(false)
           setSelectedCommission(null)
+          setPaymentForm({ payment_method: 'transfer', reference: '' })
         }}
         title="確認佣金付款"
         size="sm"
         footer={
           <>
             <button
-              onClick={() => setShowPayModal(false)}
+              onClick={() => {
+                setShowPayModal(false)
+                setSelectedCommission(null)
+                setPaymentForm({ payment_method: 'transfer', reference: '' })
+              }}
               className="btn-secondary"
+              disabled={payCommission.isPending}
             >
               取消
             </button>
             <button
-              onClick={() => {
-                // TODO: 實作付款 API
-                alert('付款功能開發中')
-                setShowPayModal(false)
-              }}
+              onClick={handlePayCommission}
               className="btn-success"
+              disabled={payCommission.isPending}
             >
-              <CheckCircle className="w-4 h-4 mr-2" />
-              確認付款
+              {payCommission.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  處理中...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  確認付款
+                </>
+              )}
             </button>
           </>
         }
@@ -325,8 +391,16 @@ export default function Commissions() {
             </div>
 
             <div>
-              <label className="label">付款方式</label>
-              <select className="input">
+              <label htmlFor="commission-payment-method" className="label">
+                付款方式 <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="commission-payment-method"
+                name="payment_method"
+                className="input"
+                value={paymentForm.payment_method}
+                onChange={(e) => setPaymentForm((prev) => ({ ...prev, payment_method: e.target.value }))}
+              >
                 <option value="transfer">銀行轉帳</option>
                 <option value="check">支票</option>
                 <option value="cash">現金</option>
@@ -334,11 +408,22 @@ export default function Commissions() {
             </div>
 
             <div>
-              <label className="label">備註</label>
+              <label htmlFor="commission-reference" className="label">
+                {paymentForm.payment_method === 'transfer' ? '轉帳後五碼' :
+                 paymentForm.payment_method === 'check' ? '支票號碼' : '備註'}
+                {paymentForm.payment_method === 'transfer' && <span className="text-red-500"> *</span>}
+              </label>
               <input
+                id="commission-reference"
+                name="reference"
                 type="text"
-                placeholder="轉帳帳號後五碼或支票號碼"
+                placeholder={
+                  paymentForm.payment_method === 'transfer' ? '請輸入轉帳帳號後五碼' :
+                  paymentForm.payment_method === 'check' ? '請輸入支票號碼' : '選填'
+                }
                 className="input"
+                value={paymentForm.reference}
+                onChange={(e) => setPaymentForm((prev) => ({ ...prev, reference: e.target.value }))}
               />
             </div>
           </div>
