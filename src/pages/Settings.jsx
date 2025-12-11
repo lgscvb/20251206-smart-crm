@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useStore from '../store/useStore'
 import Badge from '../components/Badge'
+import { useSettings, useUpdateSetting, useBranches } from '../hooks/useApi'
 import {
   Settings as SettingsIcon,
   User,
@@ -11,13 +12,45 @@ import {
   Save,
   RefreshCw,
   Check,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react'
 
 export default function Settings() {
   const { role, setRole } = useStore()
   const [activeTab, setActiveTab] = useState('general')
-  const [saved, setSaved] = useState(false)
+
+  // API hooks
+  const { data: allSettings, isLoading, refetch } = useSettings()
+  const { data: branches } = useBranches()
+  const updateSetting = useUpdateSetting()
+
+  // Local state for form values
+  const [generalSettings, setGeneralSettings] = useState({
+    system_name: 'Hour Jungle CRM',
+    default_branch: '',
+    timezone: 'Asia/Taipei',
+    language: 'zh-TW'
+  })
+
+  const [notificationSettings, setNotificationSettings] = useState({
+    overdue_reminder: true,
+    renewal_reminder: true,
+    commission_reminder: true,
+    email_notification: false
+  })
+
+  // Load settings when data arrives
+  useEffect(() => {
+    if (allSettings) {
+      if (allSettings.general) {
+        setGeneralSettings(prev => ({ ...prev, ...allSettings.general }))
+      }
+      if (allSettings.notifications) {
+        setNotificationSettings(prev => ({ ...prev, ...allSettings.notifications }))
+      }
+    }
+  }, [allSettings])
 
   const tabs = [
     { id: 'general', name: '一般設定', icon: SettingsIcon },
@@ -27,9 +60,30 @@ export default function Settings() {
     { id: 'api', name: 'API 設定', icon: Database }
   ]
 
-  const handleSave = () => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  const handleSaveGeneral = () => {
+    updateSetting.mutate({ key: 'general', value: generalSettings })
+  }
+
+  const handleSaveNotifications = () => {
+    updateSetting.mutate({ key: 'notifications', value: notificationSettings })
+  }
+
+  const handleNotificationToggle = (key) => {
+    const newSettings = {
+      ...notificationSettings,
+      [key]: !notificationSettings[key]
+    }
+    setNotificationSettings(newSettings)
+    // Auto-save on toggle
+    updateSetting.mutate({ key: 'notifications', value: newSettings })
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-jungle-600" />
+      </div>
+    )
   }
 
   return (
@@ -64,44 +118,72 @@ export default function Settings() {
 
               <div className="space-y-6">
                 <div>
-                  <label className="label">系統名稱</label>
+                  <label htmlFor="settings-system-name" className="label">系統名稱</label>
                   <input
+                    id="settings-system-name"
+                    name="system_name"
                     type="text"
-                    defaultValue="Hour Jungle CRM"
+                    value={generalSettings.system_name}
+                    onChange={(e) => setGeneralSettings(prev => ({ ...prev, system_name: e.target.value }))}
                     className="input"
                   />
                 </div>
 
                 <div>
-                  <label className="label">預設分館</label>
-                  <select className="input">
+                  <label htmlFor="settings-default-branch" className="label">預設分館</label>
+                  <select
+                    id="settings-default-branch"
+                    name="default_branch"
+                    value={generalSettings.default_branch || ''}
+                    onChange={(e) => setGeneralSettings(prev => ({ ...prev, default_branch: e.target.value || null }))}
+                    className="input"
+                  >
                     <option value="">不指定</option>
-                    <option value="1">大忠館</option>
-                    <option value="2">環瑞館</option>
+                    {branches?.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="label">時區</label>
-                  <select className="input">
+                  <label htmlFor="settings-timezone" className="label">時區</label>
+                  <select
+                    id="settings-timezone"
+                    name="timezone"
+                    value={generalSettings.timezone}
+                    onChange={(e) => setGeneralSettings(prev => ({ ...prev, timezone: e.target.value }))}
+                    className="input"
+                  >
                     <option value="Asia/Taipei">台北 (UTC+8)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="label">語言</label>
-                  <select className="input">
+                  <label htmlFor="settings-language" className="label">語言</label>
+                  <select
+                    id="settings-language"
+                    name="language"
+                    value={generalSettings.language}
+                    onChange={(e) => setGeneralSettings(prev => ({ ...prev, language: e.target.value }))}
+                    className="input"
+                  >
                     <option value="zh-TW">繁體中文</option>
                     <option value="en">English</option>
                   </select>
                 </div>
 
                 <div className="pt-4 border-t">
-                  <button onClick={handleSave} className="btn-primary">
-                    {saved ? (
+                  <button
+                    onClick={handleSaveGeneral}
+                    disabled={updateSetting.isPending}
+                    className="btn-primary"
+                  >
+                    {updateSetting.isPending ? (
                       <>
-                        <Check className="w-4 h-4 mr-2" />
-                        已儲存
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        儲存中...
                       </>
                     ) : (
                       <>
@@ -122,8 +204,10 @@ export default function Settings() {
 
               <div className="space-y-6">
                 <div>
-                  <label className="label">目前角色</label>
+                  <label htmlFor="settings-role" className="label">目前角色</label>
                   <select
+                    id="settings-role"
+                    name="role"
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
                     className="input"
@@ -184,7 +268,12 @@ export default function Settings() {
                     </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" defaultChecked className="sr-only peer" />
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.overdue_reminder}
+                      onChange={() => handleNotificationToggle('overdue_reminder')}
+                      className="sr-only peer"
+                    />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                   </label>
                 </div>
@@ -197,7 +286,12 @@ export default function Settings() {
                     </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" defaultChecked className="sr-only peer" />
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.renewal_reminder}
+                      onChange={() => handleNotificationToggle('renewal_reminder')}
+                      className="sr-only peer"
+                    />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                   </label>
                 </div>
@@ -210,7 +304,12 @@ export default function Settings() {
                     </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" defaultChecked className="sr-only peer" />
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.commission_reminder}
+                      onChange={() => handleNotificationToggle('commission_reminder')}
+                      className="sr-only peer"
+                    />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                   </label>
                 </div>
@@ -223,7 +322,12 @@ export default function Settings() {
                     </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" />
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.email_notification}
+                      onChange={() => handleNotificationToggle('email_notification')}
+                      className="sr-only peer"
+                    />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                   </label>
                 </div>
@@ -290,11 +394,14 @@ export default function Settings() {
 
               <div className="space-y-6">
                 <div>
-                  <label className="label">MCP Server URL</label>
+                  <label htmlFor="settings-mcp-url" className="label">MCP Server URL</label>
                   <input
+                    id="settings-mcp-url"
+                    name="mcp_server_url"
                     type="url"
                     defaultValue="https://auto.yourspce.org"
                     className="input"
+                    readOnly
                   />
                 </div>
 
@@ -313,7 +420,7 @@ export default function Settings() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <code className="text-sm">/tools/list</code>
-                      <Badge variant="success">14 tools</Badge>
+                      <Badge variant="success">40+ tools</Badge>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <code className="text-sm">/api/db/*</code>
@@ -327,9 +434,9 @@ export default function Settings() {
                 </div>
 
                 <div className="pt-4 border-t">
-                  <button className="btn-secondary">
+                  <button onClick={() => refetch()} className="btn-secondary">
                     <RefreshCw className="w-4 h-4 mr-2" />
-                    測試連線
+                    重新載入設定
                   </button>
                 </div>
               </div>

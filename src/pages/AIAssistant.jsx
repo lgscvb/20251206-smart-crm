@@ -14,10 +14,61 @@ import {
   Check,
   ChevronDown,
   Cpu,
-  Wrench
+  Wrench,
+  Shield,
+  AlertTriangle
 } from 'lucide-react'
 import { aiChatStream, getAIModels } from '../services/api'
 import { useQuery } from '@tanstack/react-query'
+
+// 寫入操作工具列表（需要確認）
+const WRITE_TOOLS = [
+  'crm_create_customer',
+  'crm_update_customer',
+  'crm_record_payment',
+  'crm_payment_undo',
+  'crm_create_contract',
+  'commission_pay',
+  'renewal_update_status',
+  'renewal_batch_update',
+  'line_send_message',
+  'line_send_payment_reminder',
+  'line_send_renewal_reminder',
+  'invoice_create',
+  'invoice_void',
+  'invoice_allowance',
+  'contract_generate_pdf'
+]
+
+// 工具名稱中文對照
+const TOOL_NAMES = {
+  crm_search_customers: '搜尋客戶',
+  crm_get_customer_detail: '取得客戶詳情',
+  crm_list_payments_due: '查詢應收款',
+  crm_list_renewals_due: '查詢續約提醒',
+  crm_create_customer: '建立客戶',
+  crm_update_customer: '更新客戶',
+  crm_record_payment: '記錄繳費',
+  crm_payment_undo: '撤銷繳費',
+  crm_create_contract: '建立合約',
+  commission_pay: '佣金付款',
+  renewal_update_status: '更新續約狀態',
+  renewal_update_invoice_status: '更新發票狀態',
+  renewal_get_summary: '取得續約統計',
+  renewal_batch_update: '批次更新續約',
+  line_send_message: '發送 LINE 訊息',
+  line_send_payment_reminder: '發送繳費提醒',
+  line_send_renewal_reminder: '發送續約提醒',
+  report_revenue_summary: '營收報表',
+  report_overdue_list: '逾期款報表',
+  report_commission_due: '佣金報表',
+  invoice_create: '開立發票',
+  invoice_void: '作廢發票',
+  invoice_query: '查詢發票',
+  invoice_allowance: '開立折讓單',
+  contract_generate_pdf: '生成合約 PDF',
+  contract_preview: '預覽合約'
+}
 
 // localStorage 存儲 key
 const CHAT_STORAGE_KEY = 'ai-assistant-chat-history'
@@ -71,6 +122,7 @@ export default function AIAssistant() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [currentTool, setCurrentTool] = useState(null)
   const [streamingContent, setStreamingContent] = useState('')
+  const [executedTools, setExecutedTools] = useState([]) // 本次對話執行的工具
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -126,6 +178,17 @@ export default function AIAssistant() {
       // onTool
       (toolName) => {
         setCurrentTool(toolName)
+        // 記錄執行的工具
+        setExecutedTools((prev) => {
+          const isWrite = WRITE_TOOLS.includes(toolName)
+          const newTool = {
+            name: toolName,
+            displayName: TOOL_NAMES[toolName] || toolName,
+            isWrite,
+            timestamp: new Date().toLocaleTimeString()
+          }
+          return [...prev, newTool]
+        })
       },
       // onDone
       () => {
@@ -169,11 +232,19 @@ export default function AIAssistant() {
             <h1 className="text-xl font-bold text-gray-900">AI 助手</h1>
             <p className="text-sm text-gray-500">CRM 智能查詢助手</p>
           </div>
+          {/* 安全模式徽章 */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+            <Shield className="w-3.5 h-3.5" />
+            確認模式
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {/* 模型選擇器 */}
           <div className="relative">
             <select
+              id="ai-model-selector"
+              name="ai-model"
+              aria-label="選擇 AI 模型"
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
               className="appearance-none pl-8 pr-8 py-1.5 text-sm bg-gray-100 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
@@ -198,6 +269,7 @@ export default function AIAssistant() {
           <button
             onClick={() => {
               setMessages([DEFAULT_MESSAGE])
+              setExecutedTools([])
               localStorage.removeItem(CHAT_STORAGE_KEY)
             }}
             className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
@@ -223,6 +295,32 @@ export default function AIAssistant() {
           ))}
         </div>
       </div>
+
+      {/* 執行的工具歷史 */}
+      {executedTools.length > 0 && (
+        <div className="py-2 px-3 bg-gray-50 border-b border-gray-100">
+          <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+            <Wrench className="w-3 h-3" />
+            <span>本次執行的工具：</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {executedTools.map((tool, index) => (
+              <span
+                key={index}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
+                  tool.isWrite
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'bg-blue-100 text-blue-700'
+                }`}
+                title={`${tool.name} - ${tool.timestamp}`}
+              >
+                {tool.isWrite && <AlertTriangle className="w-3 h-3" />}
+                {tool.displayName}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto py-4 space-y-4">
@@ -279,9 +377,16 @@ export default function AIAssistant() {
             </div>
             <div className="bg-gray-100 rounded-2xl px-4 py-3 max-w-[80%]">
               {currentTool ? (
-                <div className="flex items-center gap-2 text-gray-500">
-                  <Wrench className="w-4 h-4 animate-pulse" />
-                  <span className="text-sm">正在執行 {currentTool}...</span>
+                <div className={`flex items-center gap-2 ${WRITE_TOOLS.includes(currentTool) ? 'text-orange-600' : 'text-gray-500'}`}>
+                  {WRITE_TOOLS.includes(currentTool) ? (
+                    <AlertTriangle className="w-4 h-4 animate-pulse" />
+                  ) : (
+                    <Wrench className="w-4 h-4 animate-pulse" />
+                  )}
+                  <span className="text-sm">
+                    正在執行 {TOOL_NAMES[currentTool] || currentTool}...
+                    {WRITE_TOOLS.includes(currentTool) && ' (寫入操作)'}
+                  </span>
                 </div>
               ) : streamingContent ? (
                 <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900">
@@ -310,6 +415,9 @@ export default function AIAssistant() {
       <div className="pt-4 border-t border-gray-200">
         <div className="flex gap-3">
           <textarea
+            id="ai-chat-input"
+            name="ai-chat-input"
+            aria-label="輸入問題"
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}

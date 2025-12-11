@@ -8,6 +8,9 @@ import ExpiredContracts from './pages/ExpiredContracts'
 import Payments from './pages/Payments'
 import Renewals from './pages/Renewals'
 import Commissions from './pages/Commissions'
+import Quotes from './pages/Quotes'
+import Invoices from './pages/Invoices'
+import LegalLetters from './pages/LegalLetters'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import Prospects from './pages/Prospects'
@@ -26,10 +29,13 @@ function App() {
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="contracts" element={<Contracts />} />
         <Route path="contracts/expired" element={<ExpiredContracts />} />
+        <Route path="payments/legal-letters" element={<LegalLetters />} />
         <Route path="payments" element={<Payments />} />
+        <Route path="invoices" element={<Invoices />} />
         <Route path="renewals" element={<Renewals />} />
         <Route path="commissions" element={<Commissions />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="quotes" element={<Quotes />} />
         <Route path="prospects" element={<Prospects />} />
         <Route path="ai-assistant" element={<AIAssistant />} />
         <Route path="data-validation" element={<DataValidation />} />

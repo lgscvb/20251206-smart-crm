@@ -291,8 +291,10 @@ export default function CustomerDetail() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">姓名</label>
+              <label htmlFor="edit-customer-name" className="label">姓名</label>
               <input
+                id="edit-customer-name"
+                name="name"
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -300,8 +302,10 @@ export default function CustomerDetail() {
               />
             </div>
             <div>
-              <label className="label">公司名稱</label>
+              <label htmlFor="edit-customer-company" className="label">公司名稱</label>
               <input
+                id="edit-customer-company"
+                name="company_name"
                 type="text"
                 value={formData.company_name}
                 onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
@@ -312,8 +316,10 @@ export default function CustomerDetail() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">電話</label>
+              <label htmlFor="edit-customer-phone" className="label">電話</label>
               <input
+                id="edit-customer-phone"
+                name="phone"
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
@@ -321,8 +327,10 @@ export default function CustomerDetail() {
               />
             </div>
             <div>
-              <label className="label">Email</label>
+              <label htmlFor="edit-customer-email" className="label">Email</label>
               <input
+                id="edit-customer-email"
+                name="email"
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -332,8 +340,10 @@ export default function CustomerDetail() {
           </div>
 
           <div>
-            <label className="label">地址</label>
+            <label htmlFor="edit-customer-address" className="label">地址</label>
             <input
+              id="edit-customer-address"
+              name="address"
               type="text"
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
@@ -343,8 +353,10 @@ export default function CustomerDetail() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">LINE User ID</label>
+              <label htmlFor="edit-customer-line" className="label">LINE User ID</label>
               <input
+                id="edit-customer-line"
+                name="line_user_id"
                 type="text"
                 value={formData.line_user_id}
                 onChange={(e) => setFormData({ ...formData, line_user_id: e.target.value })}
@@ -353,8 +365,10 @@ export default function CustomerDetail() {
               />
             </div>
             <div>
-              <label className="label">狀態</label>
+              <label htmlFor="edit-customer-status" className="label">狀態</label>
               <select
+                id="edit-customer-status"
+                name="status"
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="input"
@@ -368,8 +382,10 @@ export default function CustomerDetail() {
           </div>
 
           <div>
-            <label className="label">風險等級</label>
+            <label htmlFor="edit-customer-risk" className="label">風險等級</label>
             <select
+              id="edit-customer-risk"
+              name="risk_level"
               value={formData.risk_level}
               onChange={(e) => setFormData({ ...formData, risk_level: e.target.value })}
               className="input"

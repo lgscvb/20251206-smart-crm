@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useContracts } from '../hooks/useApi'
+import { crm } from '../services/api'
 import DataTable from '../components/DataTable'
 import Badge, { StatusBadge } from '../components/Badge'
-import { FileText, Calendar, DollarSign, FileX, Settings2, ChevronDown } from 'lucide-react'
+import { FileText, Calendar, DollarSign, FileX, Settings2, ChevronDown, FileDown, Loader2, ExternalLink } from 'lucide-react'
 
 // 可選欄位定義（# 和合約編號固定顯示）
 const OPTIONAL_COLUMNS = {
@@ -15,7 +16,8 @@ const OPTIONAL_COLUMNS = {
   end_date: { label: '到期日', default: true },
   monthly_rent: { label: '月租', default: true },
   payment_cycle: { label: '每期金額', default: true },
-  status: { label: '狀態', default: true }
+  status: { label: '狀態', default: true },
+  actions: { label: '操作', default: true }
 }
 
 export default function Contracts() {
@@ -23,6 +25,34 @@ export default function Contracts() {
   const [statusFilter, setStatusFilter] = useState('')
   const [pageSize, setPageSize] = useState(15)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
+  const [generatingPdf, setGeneratingPdf] = useState(null) // 正在生成 PDF 的合約 ID
+  const [pdfResult, setPdfResult] = useState(null) // PDF 生成結果
+
+  // 生成合約 PDF
+  const handleGeneratePdf = async (contractId) => {
+    setGeneratingPdf(contractId)
+    setPdfResult(null)
+    try {
+      const result = await crm.generateContractPdf(contractId)
+      if (result.success && result.pdf_url) {
+        setPdfResult({
+          contractId,
+          url: result.pdf_url,
+          expiresAt: result.expires_at,
+          message: result.message
+        })
+        // 自動開啟下載連結
+        window.open(result.pdf_url, '_blank')
+      } else {
+        alert(result.message || '生成失敗')
+      }
+    } catch (error) {
+      console.error('生成合約 PDF 失敗:', error)
+      alert('生成合約 PDF 失敗: ' + (error.message || '未知錯誤'))
+    } finally {
+      setGeneratingPdf(null)
+    }
+  }
 
   // 初始化欄位顯示狀態
   const [visibleColumns, setVisibleColumns] = useState(() => {
@@ -164,6 +194,47 @@ export default function Contracts() {
       header: '狀態',
       accessor: 'status',
       cell: (row) => <StatusBadge status={row.status} />
+    },
+    {
+      key: 'actions',
+      header: '操作',
+      accessor: 'id',
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleGeneratePdf(row.id)
+            }}
+            disabled={generatingPdf === row.id}
+            className="btn-secondary text-xs py-1 px-2 disabled:opacity-50"
+            title="生成合約 PDF"
+          >
+            {generatingPdf === row.id ? (
+              <>
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                生成中...
+              </>
+            ) : (
+              <>
+                <FileDown className="w-3 h-3 mr-1" />
+                合約PDF
+              </>
+            )}
+          </button>
+          {pdfResult?.contractId === row.id && (
+            <a
+              href={pdfResult.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-600 hover:text-primary-700"
+              title="開啟 PDF"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
+        </div>
+      )
     }
   ]
 
@@ -229,8 +300,10 @@ export default function Contracts() {
       <div className="card">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">狀態：</label>
+            <label htmlFor="contract-status-filter" className="text-sm text-gray-600">狀態：</label>
             <select
+              id="contract-status-filter"
+              name="contract-status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="input w-40"
@@ -242,8 +315,10 @@ export default function Contracts() {
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">每頁：</label>
+            <label htmlFor="contract-page-size" className="text-sm text-gray-600">每頁：</label>
             <select
+              id="contract-page-size"
+              name="page-size"
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
               className="input w-20"

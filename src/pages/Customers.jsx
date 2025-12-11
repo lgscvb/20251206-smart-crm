@@ -191,8 +191,10 @@ export default function Customers() {
       <div className="card">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">狀態：</label>
+            <label htmlFor="customer-status-filter" className="text-sm text-gray-600">狀態：</label>
             <select
+              id="customer-status-filter"
+              name="customer-status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="input w-40"
@@ -205,8 +207,10 @@ export default function Customers() {
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">每頁：</label>
+            <label htmlFor="customer-page-size" className="text-sm text-gray-600">每頁：</label>
             <select
+              id="customer-page-size"
+              name="page-size"
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
               className="input w-20"
@@ -312,12 +316,14 @@ export default function Customers() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">
+              <label htmlFor="new-customer-name" className="label">
                 姓名 <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
+                  id="new-customer-name"
+                  name="name"
                   type="text"
                   value={formData.name}
                   onChange={(e) =>
@@ -329,10 +335,12 @@ export default function Customers() {
               </div>
             </div>
             <div>
-              <label className="label">公司名稱</label>
+              <label htmlFor="new-customer-company" className="label">公司名稱</label>
               <div className="relative">
                 <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
+                  id="new-customer-company"
+                  name="company_name"
                   type="text"
                   value={formData.company_name}
                   onChange={(e) =>
@@ -347,10 +355,12 @@ export default function Customers() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">電話</label>
+              <label htmlFor="new-customer-phone" className="label">電話</label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
+                  id="new-customer-phone"
+                  name="phone"
                   type="tel"
                   value={formData.phone}
                   onChange={(e) =>
@@ -362,10 +372,12 @@ export default function Customers() {
               </div>
             </div>
             <div>
-              <label className="label">Email</label>
+              <label htmlFor="new-customer-email" className="label">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
+                  id="new-customer-email"
+                  name="email"
                   type="email"
                   value={formData.email}
                   onChange={(e) =>
@@ -380,10 +392,12 @@ export default function Customers() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">
+              <label htmlFor="new-customer-branch" className="label">
                 分館 <span className="text-red-500">*</span>
               </label>
               <select
+                id="new-customer-branch"
+                name="branch_id"
                 value={formData.branch_id}
                 onChange={(e) =>
                   setFormData({ ...formData, branch_id: e.target.value })
@@ -398,10 +412,12 @@ export default function Customers() {
               </select>
             </div>
             <div>
-              <label className="label">LINE User ID</label>
+              <label htmlFor="new-customer-line" className="label">LINE User ID</label>
               <div className="relative">
                 <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
+                  id="new-customer-line"
+                  name="line_user_id"
                   type="text"
                   value={formData.line_user_id}
                   onChange={(e) =>

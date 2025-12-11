@@ -5,6 +5,7 @@ import {
   Users,
   FileText,
   CreditCard,
+  Receipt,
   Bell,
   DollarSign,
   BarChart3,
@@ -17,7 +18,9 @@ import {
   UserPlus,
   Bot,
   ShieldCheck,
-  HelpCircle
+  HelpCircle,
+  FileSignature,
+  Scale
 } from 'lucide-react'
 import useStore from '../store/useStore'
 import { useBranches } from '../hooks/useApi'
@@ -28,8 +31,10 @@ const navigation = [
   { name: '客戶管理', href: '/customers', icon: Users },
   { name: '合約管理', href: '/contracts', icon: FileText },
   { name: '繳費管理', href: '/payments', icon: CreditCard },
+  { name: '發票管理', href: '/invoices', icon: Receipt },
   { name: '續約提醒', href: '/renewals', icon: Bell },
   { name: '佣金管理', href: '/commissions', icon: DollarSign },
+  { name: '報價單', href: '/quotes', icon: FileSignature },
   { name: '報表中心', href: '/reports', icon: BarChart3 },
   { name: 'AI 助手', href: '/ai-assistant', icon: Bot },
   { name: '資料驗證', href: '/data-validation', icon: ShieldCheck },
@@ -85,10 +90,12 @@ export default function Layout() {
         {/* Branch Selector */}
         {sidebarOpen && (
           <div className="p-4 border-b border-gray-200">
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <label htmlFor="branch-selector" className="text-xs font-medium text-gray-500 uppercase tracking-wider">
               選擇分館
             </label>
             <select
+              id="branch-selector"
+              name="branch-selector"
               value={selectedBranch || ''}
               onChange={(e) => setSelectedBranch(e.target.value ? Number(e.target.value) : null)}
               className="mt-2 w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-jungle-500"
