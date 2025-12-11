@@ -365,9 +365,6 @@ export default function Reports() {
 
               {/* 期間選擇下拉 */}
               <select
-                id="report-period-selector"
-                name="report-period"
-                aria-label="選擇報表期間"
                 value={activePeriod || ''}
                 onChange={(e) => setSelectedPeriod(e.target.value)}
                 className="input text-sm w-32"

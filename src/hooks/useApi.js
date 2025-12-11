@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { db, crm, line, reports, settings, legalLetter } from '../services/api'
+import { db, crm, line, reports } from '../services/api'
 import useStore from '../store/useStore'
 
 // ============================================================================
@@ -116,22 +116,6 @@ export function useOverdueDetails(params = {}) {
   })
 }
 
-export function usePaymentsHistory(params = {}) {
-  const selectedBranch = useStore((state) => state.selectedBranch)
-
-  return useQuery({
-    queryKey: ['payments-history', params, selectedBranch],
-    queryFn: async () => {
-      const queryParams = { ...params }
-      if (selectedBranch) {
-        queryParams.branch_id = `eq.${selectedBranch}`
-      }
-      const data = await db.getPaymentsHistory(queryParams)
-      return Array.isArray(data) ? data : []
-    }
-  })
-}
-
 export function useRecordPayment() {
   const queryClient = useQueryClient()
   const addNotification = useStore((state) => state.addNotification)
@@ -147,30 +131,6 @@ export function useRecordPayment() {
     },
     onError: (error) => {
       addNotification({ type: 'error', message: `記錄失敗: ${error.message}` })
-    }
-  })
-}
-
-export function useUndoPayment() {
-  const queryClient = useQueryClient()
-  const addNotification = useStore((state) => state.addNotification)
-
-  return useMutation({
-    mutationFn: ({ paymentId, reason }) =>
-      crm.undoPayment(paymentId, reason),
-    onSuccess: (data) => {
-      if (data.success) {
-        queryClient.invalidateQueries({ queryKey: ['payments-due'] })
-        queryClient.invalidateQueries({ queryKey: ['overdue'] })
-        queryClient.invalidateQueries({ queryKey: ['payments-history'] })
-        queryClient.invalidateQueries({ queryKey: ['branch-revenue'] })
-        addNotification({ type: 'success', message: '繳費已撤銷' })
-      } else {
-        addNotification({ type: 'error', message: data.message || '撤銷失敗' })
-      }
-    },
-    onError: (error) => {
-      addNotification({ type: 'error', message: `撤銷失敗: ${error.message}` })
     }
   })
 }
@@ -364,43 +324,6 @@ export function useCommissionReport(firmId, status) {
 }
 
 // ============================================================================
-// 系統設定 Hooks
-// ============================================================================
-
-export function useSettings() {
-  return useQuery({
-    queryKey: ['settings'],
-    queryFn: () => settings.getAll(),
-    staleTime: 1000 * 60 * 5 // 5 minutes
-  })
-}
-
-export function useSetting(key) {
-  return useQuery({
-    queryKey: ['settings', key],
-    queryFn: () => settings.get(key),
-    enabled: !!key,
-    staleTime: 1000 * 60 * 5
-  })
-}
-
-export function useUpdateSetting() {
-  const queryClient = useQueryClient()
-  const addNotification = useStore((state) => state.addNotification)
-
-  return useMutation({
-    mutationFn: ({ key, value }) => settings.update(key, value),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] })
-      addNotification({ type: 'success', message: '設定已儲存' })
-    },
-    onError: (error) => {
-      addNotification({ type: 'error', message: `儲存失敗: ${error.message}` })
-    }
-  })
-}
-
-// ============================================================================
 // 歷史營收 Hooks (YoY/MoM/QoQ)
 // ============================================================================
 
@@ -467,130 +390,5 @@ export function useCompanyYearlyRevenue(params = {}) {
   return useQuery({
     queryKey: ['company-yearly-revenue', params],
     queryFn: () => db.getCompanyYearlyRevenue({ order: 'period_start.desc', limit: 5, ...params })
-  })
-}
-
-// ============================================================================
-// 存證信函 Hooks
-// ============================================================================
-
-export function useLegalLetterCandidates() {
-  const selectedBranch = useStore((state) => state.selectedBranch)
-
-  return useQuery({
-    queryKey: ['legal-candidates', selectedBranch],
-    queryFn: () => legalLetter.getCandidates(selectedBranch)
-  })
-}
-
-export function useLegalLetterPending(status) {
-  const selectedBranch = useStore((state) => state.selectedBranch)
-
-  return useQuery({
-    queryKey: ['legal-pending', selectedBranch, status],
-    queryFn: () => legalLetter.getPending(selectedBranch, status)
-  })
-}
-
-export function useRecordReminder() {
-  const queryClient = useQueryClient()
-  const addNotification = useStore((state) => state.addNotification)
-
-  return useMutation({
-    mutationFn: ({ paymentId, notes }) => legalLetter.recordReminder(paymentId, notes),
-    onSuccess: (data) => {
-      if (data.success) {
-        queryClient.invalidateQueries({ queryKey: ['payments-due'] })
-        queryClient.invalidateQueries({ queryKey: ['overdue'] })
-        queryClient.invalidateQueries({ queryKey: ['legal-candidates'] })
-        addNotification({ type: 'success', message: data.result?.message || '催繳記錄成功' })
-      } else {
-        addNotification({ type: 'error', message: data.error || '記錄失敗' })
-      }
-    },
-    onError: (error) => {
-      addNotification({ type: 'error', message: `記錄失敗: ${error.message}` })
-    }
-  })
-}
-
-export function useGenerateLegalContent() {
-  const addNotification = useStore((state) => state.addNotification)
-
-  return useMutation({
-    mutationFn: (params) => legalLetter.generateContent(params),
-    onSuccess: (data) => {
-      if (data.success) {
-        addNotification({ type: 'success', message: '存證信函內容生成成功' })
-      } else {
-        addNotification({ type: 'error', message: data.error || '生成失敗' })
-      }
-    },
-    onError: (error) => {
-      addNotification({ type: 'error', message: `生成失敗: ${error.message}` })
-    }
-  })
-}
-
-export function useCreateLegalLetter() {
-  const queryClient = useQueryClient()
-  const addNotification = useStore((state) => state.addNotification)
-
-  return useMutation({
-    mutationFn: ({ paymentId, content, recipientName, recipientAddress }) =>
-      legalLetter.create(paymentId, content, recipientName, recipientAddress),
-    onSuccess: (data) => {
-      if (data.success) {
-        queryClient.invalidateQueries({ queryKey: ['legal-candidates'] })
-        queryClient.invalidateQueries({ queryKey: ['legal-pending'] })
-        addNotification({ type: 'success', message: data.result?.message || '存證信函建立成功' })
-      } else {
-        addNotification({ type: 'error', message: data.error || '建立失敗' })
-      }
-    },
-    onError: (error) => {
-      addNotification({ type: 'error', message: `建立失敗: ${error.message}` })
-    }
-  })
-}
-
-export function useGenerateLegalPdf() {
-  const queryClient = useQueryClient()
-  const addNotification = useStore((state) => state.addNotification)
-
-  return useMutation({
-    mutationFn: (letterId) => legalLetter.generatePdf(letterId),
-    onSuccess: (data) => {
-      if (data.success) {
-        queryClient.invalidateQueries({ queryKey: ['legal-pending'] })
-        addNotification({ type: 'success', message: 'PDF 生成成功' })
-      } else {
-        addNotification({ type: 'error', message: data.error || 'PDF 生成失敗' })
-      }
-    },
-    onError: (error) => {
-      addNotification({ type: 'error', message: `PDF 生成失敗: ${error.message}` })
-    }
-  })
-}
-
-export function useUpdateLegalStatus() {
-  const queryClient = useQueryClient()
-  const addNotification = useStore((state) => state.addNotification)
-
-  return useMutation({
-    mutationFn: ({ letterId, status, approvedBy, trackingNumber, notes }) =>
-      legalLetter.updateStatus(letterId, status, approvedBy, trackingNumber, notes),
-    onSuccess: (data) => {
-      if (data.success) {
-        queryClient.invalidateQueries({ queryKey: ['legal-pending'] })
-        addNotification({ type: 'success', message: data.result?.message || '狀態更新成功' })
-      } else {
-        addNotification({ type: 'error', message: data.error || '更新失敗' })
-      }
-    },
-    onError: (error) => {
-      addNotification({ type: 'error', message: `更新失敗: ${error.message}` })
-    }
   })
 }

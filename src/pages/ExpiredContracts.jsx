@@ -203,10 +203,8 @@ export default function ExpiredContracts() {
       {/* 篩選 */}
       <div className="card">
         <div className="flex items-center gap-4">
-          <label htmlFor="expired-status-filter" className="text-sm text-gray-600">狀態：</label>
+          <label className="text-sm text-gray-600">狀態：</label>
           <select
-            id="expired-status-filter"
-            name="expired-status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="input w-32"
@@ -216,10 +214,8 @@ export default function ExpiredContracts() {
             <option value="cancelled">已取消</option>
           </select>
 
-          <label htmlFor="expired-page-size" className="text-sm text-gray-600 ml-4">每頁：</label>
+          <label className="text-sm text-gray-600 ml-4">每頁：</label>
           <select
-            id="expired-page-size"
-            name="page-size"
             value={pageSize}
             onChange={(e) => setPageSize(Number(e.target.value))}
             className="input w-20"

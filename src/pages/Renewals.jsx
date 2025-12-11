@@ -1,8 +1,6 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useRenewalReminders, useSendRenewalReminder, useBranches } from '../hooks/useApi'
 import { callTool } from '../services/api'
-import useStore from '../store/useStore'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
@@ -23,8 +21,7 @@ import {
   ChevronDown,
   RefreshCw,
   Settings2,
-  Edit3,
-  Scale
+  Edit3
 } from 'lucide-react'
 
 // 續約狀態定義
@@ -43,28 +40,6 @@ const INVOICE_STATUSES = {
   pending_tax_id: { label: '等待統編', color: 'yellow' },
   issued_personal: { label: '已開二聯', color: 'blue' },
   issued_business: { label: '已開三聯', color: 'green' }
-}
-
-// 狀態轉換規則（定義合法的狀態轉換）
-const VALID_TRANSITIONS = {
-  none: ['notified'],                          // 待處理 → 已通知
-  notified: ['confirmed', 'none'],             // 已通知 → 已確認 或 退回待處理
-  confirmed: ['paid', 'notified'],             // 已確認 → 已收款 或 退回已通知
-  paid: ['invoiced'],                          // 已收款 → 已開票
-  invoiced: ['signed'],                        // 已開票 → 已簽約
-  signed: ['completed'],                       // 已簽約 → 完成
-  completed: []                                // 完成 → 不能變更
-}
-
-// 檢查狀態轉換是否合法
-const canTransition = (fromStatus, toStatus) => {
-  const validTargets = VALID_TRANSITIONS[fromStatus] || []
-  return validTargets.includes(toStatus)
-}
-
-// 取得可轉換的目標狀態列表
-const getValidTargetStatuses = (currentStatus) => {
-  return VALID_TRANSITIONS[currentStatus] || []
 }
 
 // 可選欄位定義
@@ -140,7 +115,6 @@ const getCurrentMonthlyRent = (row) => {
 }
 
 export default function Renewals() {
-  const navigate = useNavigate()
   const [showReminderModal, setShowReminderModal] = useState(false)
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [selectedContract, setSelectedContract] = useState(null)
@@ -461,10 +435,8 @@ export default function Renewals() {
       {/* 篩選器 */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
-          <label htmlFor="renewal-branch-filter" className="text-sm text-gray-600">分館：</label>
+          <label className="text-sm text-gray-600">分館：</label>
           <select
-            id="renewal-branch-filter"
-            name="branch-filter"
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
             className="input w-32"
@@ -479,10 +451,8 @@ export default function Renewals() {
         </div>
 
         <div className="flex items-center gap-2">
-          <label htmlFor="renewal-status-filter" className="text-sm text-gray-600">狀態：</label>
+          <label className="text-sm text-gray-600">狀態：</label>
           <select
-            id="renewal-status-filter"
-            name="status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="input w-32"
@@ -497,10 +467,8 @@ export default function Renewals() {
         </div>
 
         <div className="flex items-center gap-2">
-          <label htmlFor="renewal-page-size" className="text-sm text-gray-600">每頁：</label>
+          <label className="text-sm text-gray-600">每頁：</label>
           <select
-            id="renewal-page-size"
-            name="page-size"
             value={pageSize}
             onChange={(e) => setPageSize(Number(e.target.value))}
             className="input w-20"
@@ -567,14 +535,6 @@ export default function Renewals() {
             </span>
           )}
         </div>
-
-        <button
-          onClick={() => navigate('/payments/legal-letters')}
-          className="btn-secondary"
-        >
-          <Scale className="w-4 h-4 mr-2" />
-          存證信函
-        </button>
       </div>
 
       {/* 緊急提醒區塊 */}
@@ -734,8 +694,6 @@ export default function Renewals() {
                 </button>
               </div>
               <textarea
-                id="reminder-text"
-                name="reminder_text"
                 value={reminderText}
                 onChange={(e) => setReminderText(e.target.value)}
                 placeholder="輸入要發送的提醒訊息..."
@@ -786,73 +744,33 @@ export default function Renewals() {
             {/* 續約狀態選擇 */}
             <div>
               <h4 className="font-medium mb-3">續約狀態</h4>
-              {/* 當前狀態 */}
-              {(() => {
-                const currentStatus = selectedContract.renewal_status || 'none'
-                const currentConfig = RENEWAL_STATUSES[currentStatus]
-                const CurrentIcon = currentConfig?.icon || Clock
-                return (
-                  <div className={`p-3 rounded-lg border-2 border-${currentConfig?.color || 'gray'}-500 bg-${currentConfig?.color || 'gray'}-50 mb-4`}>
-                    <div className="flex items-center gap-2">
-                      <CurrentIcon className={`w-5 h-5 text-${currentConfig?.color || 'gray'}-500`} />
-                      <span className="font-medium">目前狀態：{currentConfig?.label || '待處理'}</span>
-                    </div>
-                  </div>
-                )
-              })()}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {Object.entries(RENEWAL_STATUSES).map(([key, { label, color, icon: Icon }]) => {
+                  const isSelected = selectedContract.renewal_status === key ||
+                    (!selectedContract.renewal_status && key === 'none')
 
-              {/* 可轉換的狀態按鈕 */}
-              {(() => {
-                const currentStatus = selectedContract.renewal_status || 'none'
-                const validTargets = getValidTargetStatuses(currentStatus)
-
-                if (validTargets.length === 0) {
                   return (
-                    <p className="text-sm text-gray-500 text-center py-4">
-                      此狀態已是最終狀態，無法變更
-                    </p>
+                    <button
+                      key={key}
+                      onClick={() =>
+                        updateStatus.mutate({
+                          contractId: selectedContract.id,
+                          status: key
+                        })
+                      }
+                      disabled={updateStatus.isPending}
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        isSelected
+                          ? `border-${color}-500 bg-${color}-50`
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 text-${color}-500 mx-auto mb-1`} />
+                      <p className="text-xs font-medium">{label}</p>
+                    </button>
                   )
-                }
-
-                return (
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-600 mb-2">可變更為：</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {validTargets.map((key) => {
-                        const { label, color, icon: Icon } = RENEWAL_STATUSES[key]
-                        const isBackward = ['none', 'notified'].includes(key) &&
-                          ['confirmed', 'paid', 'invoiced', 'signed'].includes(currentStatus)
-
-                        return (
-                          <button
-                            key={key}
-                            onClick={() =>
-                              updateStatus.mutate({
-                                contractId: selectedContract.id,
-                                status: key
-                              })
-                            }
-                            disabled={updateStatus.isPending}
-                            className={`p-3 rounded-lg border-2 transition-all hover:border-${color}-400 ${
-                              isBackward
-                                ? 'border-orange-300 bg-orange-50 hover:bg-orange-100'
-                                : 'border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 justify-center">
-                              <Icon className={`w-5 h-5 text-${color}-500`} />
-                              <span className="text-sm font-medium">{label}</span>
-                              {isBackward && (
-                                <span className="text-xs text-orange-600">(退回)</span>
-                              )}
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })()}
+                })}
+              </div>
             </div>
 
             {/* 發票狀態 */}
@@ -916,10 +834,8 @@ export default function Renewals() {
 
             {/* 備註編輯 */}
             <div>
-              <label htmlFor="renewal-notes" className="font-medium mb-2 block">備註（如：新合約金額、特殊條件）</label>
+              <h4 className="font-medium mb-2">備註（如：新合約金額、特殊條件）</h4>
               <textarea
-                id="renewal-notes"
-                name="renewal_notes"
                 value={renewalNotes}
                 onChange={(e) => setRenewalNotes(e.target.value)}
                 placeholder="例：新合約 $1,800/月 年繳，已匯款，待回傳簽約"
