@@ -1,25 +1,19 @@
 import axios from 'axios'
 
-// ⚠️ 重要：雙層 /api/ 抵消設計 ⚠️
-// 開發環境使用 /proxy，正式環境使用 /api（由 nginx 反向代理）
-//
-// 正式環境路徑組合：
-//   baseURL: /api
-//   + 路徑: /api/db/xxx (下面的 db.getXxx 等方法)
-//   = 實際發出: /api/api/db/xxx
-//   → Nginx trailing slash 剝掉第一層 /api/
-//   → 後端收到: /api/db/xxx (正確)
-//
-// 請勿隨意修改路徑前綴，會導致 API 404！
-// 同步修改需一併調整 nginx.conf
+// API 路由設計說明
+// - 開發環境：baseURL = /proxy（Vite proxy 轉發到本地 MCP Server）
+// - 正式環境：baseURL = ''（直接發 /api/db/xxx，由 Cloudflare + Nginx 處理）
 const isDev = import.meta.env.DEV
-const API_BASE = isDev ? '/proxy' : '/api'
+// 正式環境不需要 baseURL，直接發 /api/db/xxx（單層路徑）
+// Cloudflare + Nginx 會正確處理
+const API_BASE = isDev ? '/proxy' : ''
 
 const api = axios.create({
   baseURL: API_BASE,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
   },
 })
 
@@ -45,9 +39,10 @@ api.interceptors.response.use(
 // MCP Tools API
 // ============================================================================
 
-export const callTool = async (toolName, parameters = {}) => {
+export const callTool = async (toolName, parameters = {}, config = {}) => {
   // MCP Server 使用 "tool" 欄位而非 "name"
-  const response = await api.post('/tools/call', { tool: toolName, parameters })
+  // 正確端點是 /tools/call（不是 /api/tools/call）
+  const response = await api.post('/tools/call', { tool: toolName, parameters }, config)
   return response
 }
 
@@ -57,7 +52,7 @@ export const callTool = async (toolName, parameters = {}) => {
 
 export const aiChat = async (messages, model = 'claude-sonnet-4') => {
   // 呼叫 MCP Server 的 AI Chat 端點（AI 回應需要較長時間）
-  const response = await api.post('/ai/chat', { messages, model }, { timeout: 120000 })
+  const response = await api.post('/api/ai/chat', { messages, model }, { timeout: 120000 })
   return response
 }
 
@@ -114,7 +109,7 @@ export const aiChatStream = async (messages, model, onChunk, onTool, onDone, onE
 
 export const getAIModels = async () => {
   // 取得可用的 AI 模型列表
-  const response = await api.get('/ai/models')
+  const response = await api.get('/api/ai/models')
   return response
 }
 
@@ -342,12 +337,83 @@ export const crm = {
     return callTool('crm_create_contract', data)
   },
 
+  async getContractDetail(contractId) {
+    // 取得合約詳情（含客戶資訊和繳費記錄）
+    try {
+      // 取得合約基本資料
+      const contractData = await api.get('/api/db/contracts', {
+        params: {
+          id: `eq.${contractId}`,
+          select: '*,customers(*),branches(name)'
+        }
+      })
+      const contractArr = ensureArray(contractData)
+      const contract = contractArr[0]
+      if (!contract) {
+        return { success: false, error: '找不到合約' }
+      }
+
+      // 取得該合約的繳費記錄
+      const rawPayments = await api.get('/api/db/payments', {
+        params: {
+          contract_id: `eq.${contractId}`,
+          select: '*',
+          order: 'due_date.asc',
+          limit: 50
+        }
+      })
+
+      return {
+        success: true,
+        data: {
+          contract,
+          customer: contract.customers,
+          branch: contract.branches,
+          payments: ensureArray(rawPayments)
+        }
+      }
+    } catch (error) {
+      console.error('取得合約詳情失敗:', error)
+      return { success: false, error: error.message }
+    }
+  },
+
   async generateContractPdf(contractId) {
-    return callTool('contract_generate_pdf', { contract_id: contractId })
+    // PDF 生成需要較長時間（Cloud Run 冷啟動 + 生成 + 上傳 GCS）
+    return callTool('contract_generate_pdf', { contract_id: contractId }, { timeout: 120000 })
   },
 
   async generateQuotePdf(quoteId) {
-    return callTool('quote_generate_pdf', { quote_id: quoteId })
+    // PDF 生成需要較長時間（Cloud Run 冷啟動 + 生成 + 上傳 GCS）
+    return callTool('quote_generate_pdf', { quote_id: quoteId }, { timeout: 120000 })
+  },
+
+  // 續約 Checklist 相關
+  async setRenewalFlag(contractId, flag, value, notes = null) {
+    return callTool('renewal_set_flag', {
+      contract_id: contractId,
+      flag,
+      value,
+      notes
+    })
+  },
+
+  async updateInvoiceStatus(contractId, invoiceStatus, notes = null) {
+    return callTool('renewal_update_invoice_status', {
+      contract_id: contractId,
+      invoice_status: invoiceStatus,
+      notes
+    })
+  },
+
+  // 更新續約備註（直接呼叫 PostgREST）
+  async updateRenewalNotes(contractId, notes) {
+    const response = await api.patch(`/api/db/contracts?id=eq.${contractId}`, {
+      renewal_notes: notes
+    }, {
+      headers: { 'Prefer': 'return=representation' }
+    })
+    return { success: true, data: response }
   }
 }
 

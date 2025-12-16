@@ -7,9 +7,10 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/proxy': {
-        target: 'http://34.83.87.103',
+        // 使用 HTTPS 域名而非 HTTP IP（Cloudflare 強制 HTTPS）
+        target: 'https://auto.yourspce.org',
         changeOrigin: true,
-        secure: false,
+        secure: true,
         rewrite: (path) => path.replace(/^\/proxy/, '')
       }
     }
