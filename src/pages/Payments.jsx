@@ -646,6 +646,7 @@ export default function Payments() {
           onRefresh={refetchDue}
           pageSize={pageSize}
           emptyMessage="沒有待收款項"
+          onRowClick={(row) => row.contract_id && navigate(`/contracts/${row.contract_id}`)}
         />
       )}
       {activeTab === 'overdue' && (
@@ -656,6 +657,7 @@ export default function Payments() {
           onRefresh={refetchOverdue}
           pageSize={pageSize}
           emptyMessage="沒有逾期款項"
+          onRowClick={(row) => row.contract_id && navigate(`/contracts/${row.contract_id}`)}
         />
       )}
       {activeTab === 'paid' && (
@@ -666,6 +668,7 @@ export default function Payments() {
           onRefresh={refetchPaid}
           pageSize={pageSize}
           emptyMessage="沒有已付款記錄"
+          onRowClick={(row) => row.contract_id && navigate(`/contracts/${row.contract_id}`)}
         />
       )}
 

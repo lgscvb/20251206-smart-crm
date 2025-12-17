@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useRenewalReminders, useSendRenewalReminder, useBranches } from '../hooks/useApi'
-import { callTool } from '../services/api'
-import useStore from '../store/useStore'
+import { useRenewalReminders, useBranches } from '../hooks/useApi'
+import { crm, callTool } from '../services/api'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
@@ -11,7 +10,6 @@ import {
   Bell,
   Calendar,
   Send,
-  Phone,
   MessageSquare,
   AlertTriangle,
   CheckCircle,
@@ -19,23 +17,59 @@ import {
   FileText,
   Receipt,
   PenTool,
-  ChevronRight,
   ChevronDown,
   RefreshCw,
   Settings2,
   Edit3,
-  Scale
+  Scale,
+  Check,
+  X,
+  Loader2
 } from 'lucide-react'
 
-// 續約狀態定義
-const RENEWAL_STATUSES = {
-  none: { label: '待處理', color: 'gray', icon: Clock },
-  notified: { label: '已通知', color: 'blue', icon: Bell },
-  confirmed: { label: '已確認', color: 'purple', icon: CheckCircle },
-  paid: { label: '已收款', color: 'green', icon: Receipt, hint: '待簽約' },
-  invoiced: { label: '已開票', color: 'teal', icon: FileText },
-  signed: { label: '已簽約', color: 'orange', icon: PenTool },
-  completed: { label: '完成', color: 'emerald', icon: CheckCircle }
+// ============================================================================
+// Checklist 相關：Computed Flags 和 Display Status
+// ============================================================================
+
+// 從時間戳計算 flags
+function computeFlags(contract) {
+  return {
+    is_notified: !!contract.renewal_notified_at,
+    is_confirmed: !!contract.renewal_confirmed_at,
+    is_paid: !!contract.renewal_paid_at,
+    is_signed: !!contract.renewal_signed_at,
+    is_invoiced: contract.invoice_status && contract.invoice_status !== 'pending_tax_id'
+  }
+}
+
+// 根據 flags 計算顯示狀態
+function getDisplayStatus(contract) {
+  const flags = computeFlags(contract)
+
+  // 檢查是否全部完成
+  const allDone = flags.is_notified && flags.is_confirmed &&
+    flags.is_paid && flags.is_invoiced && flags.is_signed
+  if (allDone) return { label: '完成', stage: 'completed', progress: 5, issues: [] }
+
+  // 檢查是否尚未開始
+  const noneStarted = !flags.is_notified && !flags.is_confirmed &&
+    !flags.is_paid && !flags.is_invoiced && !flags.is_signed
+  if (noneStarted) return { label: '待處理', stage: 'pending', progress: 0, issues: ['全部待處理'] }
+
+  // 收集缺漏項目
+  const issues = []
+  if (!flags.is_notified) issues.push('未通知')
+  if (!flags.is_confirmed) issues.push('未確認')
+  if (!flags.is_paid) issues.push('未收款')
+  if (!flags.is_invoiced) issues.push('未開票')
+  if (!flags.is_signed) issues.push('未簽約')
+
+  return {
+    label: '進行中',
+    stage: 'in_progress',
+    issues,
+    progress: 5 - issues.length
+  }
 }
 
 // 發票狀態定義
@@ -45,35 +79,13 @@ const INVOICE_STATUSES = {
   issued_business: { label: '已開三聯', color: 'green' }
 }
 
-// 狀態轉換規則（定義合法的狀態轉換）
-const VALID_TRANSITIONS = {
-  none: ['notified'],                          // 待處理 → 已通知
-  notified: ['confirmed', 'none'],             // 已通知 → 已確認 或 退回待處理
-  confirmed: ['paid', 'notified'],             // 已確認 → 已收款 或 退回已通知
-  paid: ['invoiced'],                          // 已收款 → 已開票
-  invoiced: ['signed'],                        // 已開票 → 已簽約
-  signed: ['completed'],                       // 已簽約 → 完成
-  completed: []                                // 完成 → 不能變更
-}
-
-// 檢查狀態轉換是否合法
-const canTransition = (fromStatus, toStatus) => {
-  const validTargets = VALID_TRANSITIONS[fromStatus] || []
-  return validTargets.includes(toStatus)
-}
-
-// 取得可轉換的目標狀態列表
-const getValidTargetStatuses = (currentStatus) => {
-  return VALID_TRANSITIONS[currentStatus] || []
-}
-
 // 可選欄位定義
 const OPTIONAL_COLUMNS = {
   branch_name: { label: '分館', default: false },
   contract_number: { label: '合約', default: true },
   end_date: { label: '到期日', default: true },
   days_until_expiry: { label: '剩餘', default: true },
-  renewal_status: { label: '續約狀態', default: true },
+  renewal_progress: { label: '續約進度', default: true },
   invoice_status: { label: '發票', default: false },
   monthly_rent: { label: '月租', default: true },
   period_amount: { label: '當期金額', default: true },
@@ -93,22 +105,18 @@ const CYCLE_LABEL = {
   semi_annual: '半年繳',
   annual: '年繳'
 }
+
 // 計算當期金額（支援階梯式收費）
 const getPeriodAmount = (row) => {
   let monthlyRent = row.monthly_rent || 0
 
-  // 檢查是否有階梯式收費
   const tieredPricing = row.metadata?.tiered_pricing
   if (tieredPricing && Array.isArray(tieredPricing) && row.start_date) {
-    // 計算合約開始至今的年數
     const startDate = new Date(row.start_date)
     const now = new Date()
     const yearsElapsed = Math.floor((now - startDate) / (365.25 * 24 * 60 * 60 * 1000)) + 1
-
-    // 找到對應年份的價格
     const tierForYear = tieredPricing.find(t => t.year === yearsElapsed)
-      || tieredPricing[tieredPricing.length - 1] // 超過最高年份用最後一個價格
-
+      || tieredPricing[tieredPricing.length - 1]
     if (tierForYear) {
       monthlyRent = tierForYear.monthly_rent
     }
@@ -118,35 +126,145 @@ const getPeriodAmount = (row) => {
   return monthlyRent * multiplier
 }
 
-// 取得當前月租（支援階梯式收費）
-const getCurrentMonthlyRent = (row) => {
-  let monthlyRent = row.monthly_rent || 0
+// ============================================================================
+// Checklist Popover 元件
+// ============================================================================
 
-  const tieredPricing = row.metadata?.tiered_pricing
-  if (tieredPricing && Array.isArray(tieredPricing) && row.start_date) {
-    const startDate = new Date(row.start_date)
-    const now = new Date()
-    const yearsElapsed = Math.floor((now - startDate) / (365.25 * 24 * 60 * 60 * 1000)) + 1
+function ChecklistPopover({ contract, onUpdate, isUpdating }) {
+  const flags = computeFlags(contract)
 
-    const tierForYear = tieredPricing.find(t => t.year === yearsElapsed)
-      || tieredPricing[tieredPricing.length - 1]
+  const items = [
+    { key: 'notified', label: '已通知', icon: Bell, checked: flags.is_notified, timestamp: contract.renewal_notified_at },
+    { key: 'confirmed', label: '已確認', icon: CheckCircle, checked: flags.is_confirmed, timestamp: contract.renewal_confirmed_at },
+    { key: 'paid', label: '已收款', icon: Receipt, checked: flags.is_paid, timestamp: contract.renewal_paid_at },
+    { key: 'signed', label: '已簽約', icon: PenTool, checked: flags.is_signed, timestamp: contract.renewal_signed_at },
+  ]
 
-    if (tierForYear) {
-      monthlyRent = tierForYear.monthly_rent
-    }
+  const invoiceItem = {
+    label: '已開票',
+    icon: FileText,
+    checked: flags.is_invoiced,
+    isInvoice: true,
+    status: contract.invoice_status
   }
 
-  return monthlyRent
+  const formatTime = (ts) => {
+    if (!ts) return null
+    return new Date(ts).toLocaleString('zh-TW', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  return (
+    <div className="p-3 min-w-[240px]">
+      <h4 className="font-medium text-gray-900 mb-3 pb-2 border-b">續約進度 Checklist</h4>
+      <div className="space-y-2">
+        {items.map(({ key, label, icon: Icon, checked, timestamp }) => (
+          <div key={key} className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer flex-1">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onUpdate(key, !checked)}
+                disabled={isUpdating}
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <Icon className={`w-4 h-4 ${checked ? 'text-green-500' : 'text-gray-400'}`} />
+              <span className={`text-sm ${checked ? 'text-gray-900' : 'text-gray-500'}`}>
+                {label}
+              </span>
+            </label>
+            {timestamp && (
+              <span className="text-xs text-gray-400">{formatTime(timestamp)}</span>
+            )}
+          </div>
+        ))}
+
+        {/* 發票狀態（獨立處理） */}
+        <div className="pt-2 mt-2 border-t">
+          <div className="flex items-center gap-2 mb-2">
+            <FileText className={`w-4 h-4 ${invoiceItem.checked ? 'text-green-500' : 'text-gray-400'}`} />
+            <span className={`text-sm ${invoiceItem.checked ? 'text-gray-900' : 'text-gray-500'}`}>
+              發票狀態
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-1 ml-6">
+            {Object.entries(INVOICE_STATUSES).map(([key, { label }]) => (
+              <button
+                key={key}
+                onClick={() => onUpdate('invoice', key)}
+                disabled={isUpdating}
+                className={`text-xs px-2 py-1 rounded ${
+                  contract.invoice_status === key
+                    ? 'bg-green-100 text-green-700 font-medium'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {isUpdating && (
+        <div className="flex items-center justify-center gap-2 mt-3 pt-2 border-t text-sm text-gray-500">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          更新中...
+        </div>
+      )}
+    </div>
+  )
 }
+
+// ============================================================================
+// 進度條元件
+// ============================================================================
+
+function ProgressBar({ progress, stage, onClick }) {
+  const colors = {
+    pending: 'bg-gray-200',
+    in_progress: 'bg-blue-500',
+    completed: 'bg-green-500'
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 group"
+    >
+      <div className="flex gap-0.5">
+        {[...Array(5)].map((_, i) => (
+          <div
+            key={i}
+            className={`w-2 h-4 rounded-sm transition-colors ${
+              i < progress ? colors[stage] : 'bg-gray-200'
+            }`}
+          />
+        ))}
+      </div>
+      <span className="text-xs text-gray-500 group-hover:text-gray-700">
+        {progress}/5
+      </span>
+      <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-gray-600" />
+    </button>
+  )
+}
+
+// ============================================================================
+// 主元件
+// ============================================================================
 
 export default function Renewals() {
   const navigate = useNavigate()
   const [showReminderModal, setShowReminderModal] = useState(false)
-  const [showStatusModal, setShowStatusModal] = useState(false)
+  const [showChecklistModal, setShowChecklistModal] = useState(false)
   const [selectedContract, setSelectedContract] = useState(null)
   const [statusFilter, setStatusFilter] = useState('all')
   const [branchFilter, setBranchFilter] = useState('')
-  const [renewalNotes, setRenewalNotes] = useState('')
   const [pageSize, setPageSize] = useState(15)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const [reminderText, setReminderText] = useState('')
@@ -170,75 +288,78 @@ export default function Renewals() {
 
   const { data: renewals, isLoading, refetch } = useRenewalReminders()
   const { data: branches } = useBranches()
-  const sendReminder = useSendRenewalReminder()
 
-  // 更新續約狀態
-  const updateStatus = useMutation({
-    mutationFn: async ({ contractId, status, notes }) => {
-      return callTool('renewal_update_status', {
-        contract_id: contractId,
-        renewal_status: status,
-        notes
-      })
+  // 設定 renewal flag
+  const setRenewalFlag = useMutation({
+    mutationFn: async ({ contractId, flag, value }) => {
+      if (flag === 'invoice') {
+        // 發票狀態使用獨立 API
+        return crm.updateInvoiceStatus(contractId, value)
+      }
+      return crm.setRenewalFlag(contractId, flag, value)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['renewal-reminders'] })
-      setShowStatusModal(false)
+    }
+  })
+
+  // 發送 LINE 提醒
+  const sendReminder = useMutation({
+    mutationFn: async ({ contractId, daysRemaining }) => {
+      return callTool('line_send_renewal_reminder', {
+        contract_id: contractId,
+        days_remaining: daysRemaining
+      })
+    },
+    onSuccess: (_, variables) => {
+      // 自動設定已通知
+      setRenewalFlag.mutate({
+        contractId: variables.contractId,
+        flag: 'notified',
+        value: true
+      })
+      setShowReminderModal(false)
       setSelectedContract(null)
     }
   })
 
-  // 更新發票狀態
-  const updateInvoiceStatus = useMutation({
-    mutationFn: async ({ contractId, invoiceStatus, notes }) => {
-      return callTool('renewal_update_invoice_status', {
-        contract_id: contractId,
-        invoice_status: invoiceStatus,
-        notes
-      })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['renewal-reminders'] })
-    }
-  })
-
-  const handleSendReminder = async () => {
+  // 處理 Checklist 更新
+  const handleChecklistUpdate = (flag, value) => {
     if (!selectedContract) return
-    await sendReminder.mutateAsync({
+    setRenewalFlag.mutate({
       contractId: selectedContract.id,
-      daysRemaining: selectedContract.days_until_expiry
+      flag,
+      value
     })
-    // 自動更新狀態為已通知
-    await updateStatus.mutateAsync({
-      contractId: selectedContract.id,
-      status: 'notified',
-      notes: 'LINE 提醒已發送'
-    })
-    setShowReminderModal(false)
-    setSelectedContract(null)
   }
 
   // 根據篩選過濾資料
   const filteredRenewals = (renewals || []).filter((r) => {
-    if (statusFilter !== 'all' && r.renewal_status !== statusFilter) return false
+    const status = getDisplayStatus(r)
+    if (statusFilter !== 'all' && status.stage !== statusFilter) return false
+    if (statusFilter === 'urgent' && r.days_until_expiry > 7) return false
     if (branchFilter && r.branch_id !== parseInt(branchFilter)) return false
     return true
   })
 
-  // 統計各狀態數量
-  const statusCounts = (renewals || []).reduce((acc, r) => {
-    const status = r.renewal_status || 'none'
-    acc[status] = (acc[status] || 0) + 1
+  // 統計各階段數量（4 階段）
+  const stageCounts = (renewals || []).reduce((acc, r) => {
+    const status = getDisplayStatus(r)
+    acc[status.stage] = (acc[status.stage] || 0) + 1
+    // 緊急件（7 天內且未完成）
+    if (r.days_until_expiry <= 7 && status.stage !== 'completed') {
+      acc.urgent = (acc.urgent || 0) + 1
+    }
     return acc
-  }, {})
+  }, { pending: 0, in_progress: 0, completed: 0, urgent: 0 })
 
-  // 緊急程度分組
-  const urgent = filteredRenewals.filter((r) => r.days_until_expiry <= 7)
-  const warning = filteredRenewals.filter(
-    (r) => r.days_until_expiry > 7 && r.days_until_expiry <= 30
-  )
+  // 緊急件列表
+  const urgent = filteredRenewals.filter((r) => {
+    const status = getDisplayStatus(r)
+    return r.days_until_expiry <= 7 && status.stage !== 'completed'
+  })
 
-  // 所有欄位定義
+  // 欄位定義
   const allColumns = [
     {
       key: '_index',
@@ -307,28 +428,24 @@ export default function Renewals() {
       }
     },
     {
-      key: 'renewal_status',
-      header: '續約狀態',
-      accessor: 'renewal_status',
+      key: 'renewal_progress',
+      header: '續約進度',
+      accessor: 'renewal_progress',
       cell: (row) => {
-        const status = row.renewal_status || 'none'
-        const statusInfo = RENEWAL_STATUSES[status]
-        const Icon = statusInfo?.icon || Clock
+        const status = getDisplayStatus(row)
 
         return (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setSelectedContract(row)
-              setRenewalNotes(row.renewal_notes || '')
-              setShowStatusModal(true)
-            }}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors hover:opacity-80 bg-${statusInfo?.color}-100 text-${statusInfo?.color}-700`}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            {statusInfo?.label}
-            <ChevronRight className="w-3 h-3" />
-          </button>
+          <div className="relative">
+            <ProgressBar
+              progress={status.progress}
+              stage={status.stage}
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelectedContract(row)
+                setShowChecklistModal(true)
+              }}
+            />
+          </div>
         )
       }
     },
@@ -396,7 +513,6 @@ export default function Renewals() {
               onClick={(e) => {
                 e.stopPropagation()
                 setSelectedContract(row)
-                // 設定預設提醒文字
                 const periodAmount = getPeriodAmount(row)
                 const cycleLabel = CYCLE_LABEL[row.payment_cycle] || ''
                 setReminderText(`您好，提醒您合約 ${row.contract_number} 將於 ${row.end_date} 到期，續約金額為 $${periodAmount.toLocaleString()}（${cycleLabel}），請問是否需要續約？`)
@@ -412,11 +528,10 @@ export default function Renewals() {
             onClick={(e) => {
               e.stopPropagation()
               setSelectedContract(row)
-              setRenewalNotes(row.renewal_notes || '')
-              setShowStatusModal(true)
+              setShowChecklistModal(true)
             }}
             className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
-            title="更新狀態"
+            title="更新進度"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -432,30 +547,91 @@ export default function Renewals() {
 
   return (
     <div className="space-y-6">
-      {/* 狀態統計看板 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        {Object.entries(RENEWAL_STATUSES).map(([key, { label, color, icon: Icon }]) => {
-          const count = statusCounts[key] || 0
-          const isActive = statusFilter === key
+      {/* 4 階段狀態看板 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* 待處理 */}
+        <button
+          onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}
+          className={`p-4 rounded-xl border-2 transition-all ${
+            statusFilter === 'pending'
+              ? 'border-gray-500 bg-gray-50'
+              : 'border-gray-200 hover:border-gray-300 bg-white'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gray-100 rounded-lg">
+              <Clock className="w-5 h-5 text-gray-500" />
+            </div>
+            <div className="text-left">
+              <p className="text-2xl font-bold text-gray-700">{stageCounts.pending}</p>
+              <p className="text-sm text-gray-500">待處理</p>
+            </div>
+          </div>
+        </button>
 
-          return (
-            <button
-              key={key}
-              onClick={() => setStatusFilter(isActive ? 'all' : key)}
-              className={`p-3 rounded-lg border-2 transition-all ${
-                isActive
-                  ? `border-${color}-500 bg-${color}-50`
-                  : 'border-gray-200 hover:border-gray-300 bg-white'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Icon className={`w-4 h-4 text-${color}-500`} />
-                <span className={`text-lg font-bold text-${color}-600`}>{count}</span>
-              </div>
-              <p className="text-xs text-gray-600 mt-1">{label}</p>
-            </button>
-          )
-        })}
+        {/* 進行中 */}
+        <button
+          onClick={() => setStatusFilter(statusFilter === 'in_progress' ? 'all' : 'in_progress')}
+          className={`p-4 rounded-xl border-2 transition-all ${
+            statusFilter === 'in_progress'
+              ? 'border-blue-500 bg-blue-50'
+              : 'border-gray-200 hover:border-gray-300 bg-white'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <RefreshCw className="w-5 h-5 text-blue-500" />
+            </div>
+            <div className="text-left">
+              <p className="text-2xl font-bold text-blue-700">{stageCounts.in_progress}</p>
+              <p className="text-sm text-gray-500">進行中</p>
+            </div>
+          </div>
+        </button>
+
+        {/* 已完成 */}
+        <button
+          onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
+          className={`p-4 rounded-xl border-2 transition-all ${
+            statusFilter === 'completed'
+              ? 'border-green-500 bg-green-50'
+              : 'border-gray-200 hover:border-gray-300 bg-white'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <CheckCircle className="w-5 h-5 text-green-500" />
+            </div>
+            <div className="text-left">
+              <p className="text-2xl font-bold text-green-700">{stageCounts.completed}</p>
+              <p className="text-sm text-gray-500">已完成</p>
+            </div>
+          </div>
+        </button>
+
+        {/* 急件 */}
+        <button
+          onClick={() => setStatusFilter(statusFilter === 'urgent' ? 'all' : 'urgent')}
+          className={`p-4 rounded-xl border-2 transition-all ${
+            statusFilter === 'urgent'
+              ? 'border-red-500 bg-red-50'
+              : stageCounts.urgent > 0
+                ? 'border-red-200 hover:border-red-300 bg-white'
+                : 'border-gray-200 hover:border-gray-300 bg-white'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${stageCounts.urgent > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
+              <AlertTriangle className={`w-5 h-5 ${stageCounts.urgent > 0 ? 'text-red-500' : 'text-gray-400'}`} />
+            </div>
+            <div className="text-left">
+              <p className={`text-2xl font-bold ${stageCounts.urgent > 0 ? 'text-red-700' : 'text-gray-400'}`}>
+                {stageCounts.urgent}
+              </p>
+              <p className="text-sm text-gray-500">急件 (7天內)</p>
+            </div>
+          </div>
+        </button>
       </div>
 
       {/* 篩選器 */}
@@ -473,24 +649,6 @@ export default function Renewals() {
             {branches?.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label htmlFor="renewal-status-filter" className="text-sm text-gray-600">狀態：</label>
-          <select
-            id="renewal-status-filter"
-            name="status-filter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="input w-32"
-          >
-            <option value="all">全部</option>
-            {Object.entries(RENEWAL_STATUSES).map(([key, { label }]) => (
-              <option key={key} value={key}>
-                {label}
               </option>
             ))}
           </select>
@@ -561,11 +719,6 @@ export default function Renewals() {
 
         <div className="text-sm text-gray-500">
           共 {filteredRenewals.length} 筆
-          {urgent.length > 0 && (
-            <span className="ml-2 text-red-600 font-medium">
-              （{urgent.length} 筆緊急）
-            </span>
-          )}
         </div>
 
         <button
@@ -582,66 +735,69 @@ export default function Renewals() {
         <div className="card bg-red-50 border-red-200">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-5 h-5 text-red-600" />
-            <h3 className="font-semibold text-red-700">緊急：7天內到期或已過期</h3>
+            <h3 className="font-semibold text-red-700">緊急：7天內到期或已過期（尚未完成）</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {urgent.slice(0, 6).map((item) => (
-              <div
-                key={item.id}
-                className="p-4 bg-white rounded-lg border border-red-200 shadow-sm"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium text-gray-900">{item.customer_name}</p>
-                    <p className="text-sm text-gray-500">{item.branch_name}</p>
+            {urgent.slice(0, 6).map((item) => {
+              const status = getDisplayStatus(item)
+              return (
+                <div
+                  key={item.id}
+                  className="p-4 bg-white rounded-lg border border-red-200 shadow-sm"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">{item.customer_name}</p>
+                      <p className="text-sm text-gray-500">{item.branch_name}</p>
+                    </div>
+                    <Badge variant="danger">
+                      {item.days_until_expiry <= 0 ? `已過期` : `${item.days_until_expiry} 天`}
+                    </Badge>
                   </div>
-                  <Badge variant="danger">
-                    {item.days_until_expiry <= 0
-                      ? `已過期`
-                      : `${item.days_until_expiry} 天`}
-                  </Badge>
-                </div>
-                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-500">到期日：{item.end_date}</p>
-                    <p className="text-sm font-medium text-blue-600">
-                      ${getPeriodAmount(item).toLocaleString()}
-                      <span className="text-gray-400 text-xs ml-1">
-                        ({CYCLE_LABEL[item.payment_cycle] || '月繳'})
-                      </span>
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    {item.line_user_id && (
-                      <button
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <ProgressBar
+                        progress={status.progress}
+                        stage={status.stage}
                         onClick={() => {
                           setSelectedContract(item)
-                          const periodAmount = getPeriodAmount(item)
-                          const cycleLabel = CYCLE_LABEL[item.payment_cycle] || ''
-                          setReminderText(`您好，提醒您合約 ${item.contract_number} 將於 ${item.end_date} 到期，續約金額為 $${periodAmount.toLocaleString()}（${cycleLabel}），請問是否需要續約？`)
-                          setShowReminderModal(true)
+                          setShowChecklistModal(true)
                         }}
-                        className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
-                        title="發送 LINE"
-                      >
-                        <Send className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setSelectedContract(item)
-                        setRenewalNotes(item.renewal_notes || '')
-                        setShowStatusModal(true)
-                      }}
-                      className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
-                      title="更新狀態"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
+                      />
+                      <span className="text-xs text-gray-500">
+                        {status.issues.slice(0, 2).join('、')}
+                        {status.issues.length > 2 && '...'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-blue-600">
+                        ${getPeriodAmount(item).toLocaleString()}
+                        <span className="text-gray-400 text-xs ml-1">
+                          ({CYCLE_LABEL[item.payment_cycle] || '月繳'})
+                        </span>
+                      </p>
+                      <div className="flex gap-2">
+                        {item.line_user_id && (
+                          <button
+                            onClick={() => {
+                              setSelectedContract(item)
+                              const periodAmount = getPeriodAmount(item)
+                              const cycleLabel = CYCLE_LABEL[item.payment_cycle] || ''
+                              setReminderText(`您好，提醒您合約 ${item.contract_number} 將於 ${item.end_date} 到期，續約金額為 $${periodAmount.toLocaleString()}（${cycleLabel}），請問是否需要續約？`)
+                              setShowReminderModal(true)
+                            }}
+                            className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
+                            title="發送 LINE"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -654,6 +810,7 @@ export default function Renewals() {
         onRefresh={refetch}
         pageSize={pageSize}
         emptyMessage="沒有符合條件的續約提醒"
+        onRowClick={(row) => navigate(`/contracts/${row.id}`)}
       />
 
       {/* 發送提醒 Modal */}
@@ -678,12 +835,18 @@ export default function Renewals() {
               取消
             </button>
             <button
-              onClick={handleSendReminder}
+              onClick={() => {
+                if (!selectedContract) return
+                sendReminder.mutate({
+                  contractId: selectedContract.id,
+                  daysRemaining: selectedContract.days_until_expiry
+                })
+              }}
               disabled={sendReminder.isPending || !reminderText.trim()}
               className="btn-primary"
             >
               <Send className="w-4 h-4 mr-2" />
-              {sendReminder.isPending ? '發送中...' : '發送並更新狀態'}
+              {sendReminder.isPending ? '發送中...' : '發送並標記已通知'}
             </button>
           </>
         }
@@ -705,17 +868,8 @@ export default function Renewals() {
                   到期日：{selectedContract.end_date}
                 </span>
               </div>
-              <div className="mt-2 pt-2 border-t border-blue-200">
-                <p className="text-sm text-blue-700 font-medium">
-                  當期金額：${getPeriodAmount(selectedContract).toLocaleString()}
-                  <span className="text-blue-500 text-xs ml-1">
-                    ({CYCLE_LABEL[selectedContract.payment_cycle] || '月繳'})
-                  </span>
-                </p>
-              </div>
             </div>
 
-            {/* 提醒文字編輯區 */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
@@ -741,26 +895,26 @@ export default function Renewals() {
                 placeholder="輸入要發送的提醒訊息..."
                 className="input w-full h-32 resize-none"
               />
-              <p className="text-xs text-gray-400 mt-1">
-                字數：{reminderText.length}
-              </p>
             </div>
 
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500">發送後將自動更新狀態為「已通知」</p>
+              <p className="text-sm text-gray-500">
+                <Check className="w-4 h-4 inline mr-1 text-green-500" />
+                發送後將自動勾選「已通知」
+              </p>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* 更新狀態 Modal */}
+      {/* Checklist Modal */}
       <Modal
-        open={showStatusModal}
+        open={showChecklistModal}
         onClose={() => {
-          setShowStatusModal(false)
+          setShowChecklistModal(false)
           setSelectedContract(null)
         }}
-        title="更新續約狀態"
+        title="續約進度管理"
         size="md"
       >
         {selectedContract && (
@@ -781,164 +935,66 @@ export default function Renewals() {
                     : `剩餘 ${selectedContract.days_until_expiry} 天`}
                 </Badge>
               </div>
-            </div>
-
-            {/* 續約狀態選擇 */}
-            <div>
-              <h4 className="font-medium mb-3">續約狀態</h4>
-              {/* 當前狀態 */}
-              {(() => {
-                const currentStatus = selectedContract.renewal_status || 'none'
-                const currentConfig = RENEWAL_STATUSES[currentStatus]
-                const CurrentIcon = currentConfig?.icon || Clock
-                return (
-                  <div className={`p-3 rounded-lg border-2 border-${currentConfig?.color || 'gray'}-500 bg-${currentConfig?.color || 'gray'}-50 mb-4`}>
-                    <div className="flex items-center gap-2">
-                      <CurrentIcon className={`w-5 h-5 text-${currentConfig?.color || 'gray'}-500`} />
-                      <span className="font-medium">目前狀態：{currentConfig?.label || '待處理'}</span>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* 可轉換的狀態按鈕 */}
-              {(() => {
-                const currentStatus = selectedContract.renewal_status || 'none'
-                const validTargets = getValidTargetStatuses(currentStatus)
-
-                if (validTargets.length === 0) {
-                  return (
-                    <p className="text-sm text-gray-500 text-center py-4">
-                      此狀態已是最終狀態，無法變更
-                    </p>
-                  )
-                }
-
-                return (
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-600 mb-2">可變更為：</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {validTargets.map((key) => {
-                        const { label, color, icon: Icon } = RENEWAL_STATUSES[key]
-                        const isBackward = ['none', 'notified'].includes(key) &&
-                          ['confirmed', 'paid', 'invoiced', 'signed'].includes(currentStatus)
-
-                        return (
-                          <button
-                            key={key}
-                            onClick={() =>
-                              updateStatus.mutate({
-                                contractId: selectedContract.id,
-                                status: key
-                              })
-                            }
-                            disabled={updateStatus.isPending}
-                            className={`p-3 rounded-lg border-2 transition-all hover:border-${color}-400 ${
-                              isBackward
-                                ? 'border-orange-300 bg-orange-50 hover:bg-orange-100'
-                                : 'border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 justify-center">
-                              <Icon className={`w-5 h-5 text-${color}-500`} />
-                              <span className="text-sm font-medium">{label}</span>
-                              {isBackward && (
-                                <span className="text-xs text-orange-600">(退回)</span>
-                              )}
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })()}
-            </div>
-
-            {/* 發票狀態 */}
-            <div>
-              <h4 className="font-medium mb-3">發票狀態</h4>
-              <div className="grid grid-cols-3 gap-2">
-                {Object.entries(INVOICE_STATUSES).map(([key, { label, color }]) => {
-                  const isSelected = selectedContract.invoice_status === key
-
-                  return (
-                    <button
-                      key={key}
-                      onClick={() =>
-                        updateInvoiceStatus.mutate({
-                          contractId: selectedContract.id,
-                          invoiceStatus: key
-                        })
-                      }
-                      disabled={updateInvoiceStatus.isPending}
-                      className={`p-3 rounded-lg border-2 transition-all ${
-                        isSelected
-                          ? `border-${color}-500 bg-${color}-50`
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <p className="text-sm font-medium">{label}</p>
-                    </button>
-                  )
-                })}
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <p className="text-sm font-medium text-blue-600">
+                  當期金額：${getPeriodAmount(selectedContract).toLocaleString()}
+                  <span className="text-gray-400 text-xs ml-1">
+                    ({CYCLE_LABEL[selectedContract.payment_cycle] || '月繳'})
+                  </span>
+                </p>
               </div>
             </div>
+
+            {/* Checklist */}
+            <ChecklistPopover
+              contract={selectedContract}
+              onUpdate={handleChecklistUpdate}
+              isUpdating={setRenewalFlag.isPending}
+            />
+
+            {/* 備註 */}
+            {selectedContract.renewal_notes && (
+              <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <p className="text-sm font-medium text-yellow-800 mb-1">備註</p>
+                <p className="text-sm text-yellow-700">{selectedContract.renewal_notes}</p>
+              </div>
+            )}
 
             {/* 時間軸 */}
             {(selectedContract.renewal_notified_at ||
               selectedContract.renewal_confirmed_at ||
-              selectedContract.renewal_paid_at) && (
+              selectedContract.renewal_paid_at ||
+              selectedContract.renewal_signed_at) && (
               <div>
                 <h4 className="font-medium mb-3">處理記錄</h4>
                 <div className="space-y-2 text-sm">
                   {selectedContract.renewal_notified_at && (
                     <div className="flex items-center gap-2 text-gray-600">
                       <Bell className="w-4 h-4 text-blue-500" />
-                      <span>通知時間：{new Date(selectedContract.renewal_notified_at).toLocaleString('zh-TW')}</span>
+                      <span>通知：{new Date(selectedContract.renewal_notified_at).toLocaleString('zh-TW')}</span>
                     </div>
                   )}
                   {selectedContract.renewal_confirmed_at && (
                     <div className="flex items-center gap-2 text-gray-600">
                       <CheckCircle className="w-4 h-4 text-purple-500" />
-                      <span>確認時間：{new Date(selectedContract.renewal_confirmed_at).toLocaleString('zh-TW')}</span>
+                      <span>確認：{new Date(selectedContract.renewal_confirmed_at).toLocaleString('zh-TW')}</span>
                     </div>
                   )}
                   {selectedContract.renewal_paid_at && (
                     <div className="flex items-center gap-2 text-gray-600">
                       <Receipt className="w-4 h-4 text-green-500" />
-                      <span>收款時間：{new Date(selectedContract.renewal_paid_at).toLocaleString('zh-TW')}</span>
+                      <span>收款：{new Date(selectedContract.renewal_paid_at).toLocaleString('zh-TW')}</span>
+                    </div>
+                  )}
+                  {selectedContract.renewal_signed_at && (
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <PenTool className="w-4 h-4 text-orange-500" />
+                      <span>簽約：{new Date(selectedContract.renewal_signed_at).toLocaleString('zh-TW')}</span>
                     </div>
                   )}
                 </div>
               </div>
             )}
-
-            {/* 備註編輯 */}
-            <div>
-              <label htmlFor="renewal-notes" className="font-medium mb-2 block">備註（如：新合約金額、特殊條件）</label>
-              <textarea
-                id="renewal-notes"
-                name="renewal_notes"
-                value={renewalNotes}
-                onChange={(e) => setRenewalNotes(e.target.value)}
-                placeholder="例：新合約 $1,800/月 年繳，已匯款，待回傳簽約"
-                className="input w-full h-20 resize-none"
-              />
-              <button
-                onClick={() => {
-                  updateStatus.mutate({
-                    contractId: selectedContract.id,
-                    status: selectedContract.renewal_status || 'none',
-                    notes: renewalNotes
-                  })
-                }}
-                disabled={updateStatus.isPending || renewalNotes === (selectedContract.renewal_notes || '')}
-                className="btn-secondary text-sm mt-2"
-              >
-                儲存備註
-              </button>
-            </div>
           </div>
         )}
       </Modal>

@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import Customers from './pages/Customers'
 import CustomerDetail from './pages/CustomerDetail'
 import Contracts from './pages/Contracts'
+import ContractDetail from './pages/ContractDetail'
 import ExpiredContracts from './pages/ExpiredContracts'
 import Payments from './pages/Payments'
 import Renewals from './pages/Renewals'
@@ -17,6 +18,8 @@ import Prospects from './pages/Prospects'
 import ChurnedCustomers from './pages/ChurnedCustomers'
 import AIAssistant from './pages/AIAssistant'
 import DataValidation from './pages/DataValidation'
+import Bookings from './pages/Bookings'
+import FloorPlan from './pages/FloorPlan'
 
 function App() {
   return (
@@ -29,6 +32,7 @@ function App() {
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="contracts" element={<Contracts />} />
         <Route path="contracts/expired" element={<ExpiredContracts />} />
+        <Route path="contracts/:id" element={<ContractDetail />} />
         <Route path="payments/legal-letters" element={<LegalLetters />} />
         <Route path="payments" element={<Payments />} />
         <Route path="invoices" element={<Invoices />} />
@@ -39,6 +43,8 @@ function App() {
         <Route path="prospects" element={<Prospects />} />
         <Route path="ai-assistant" element={<AIAssistant />} />
         <Route path="data-validation" element={<DataValidation />} />
+        <Route path="bookings" element={<Bookings />} />
+        <Route path="floor-plan" element={<FloorPlan />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>

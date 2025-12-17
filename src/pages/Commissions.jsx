@@ -42,7 +42,8 @@ export default function Commissions() {
         reference: reference || null
       })
     },
-    onSuccess: (data) => {
+    onSuccess: (response) => {
+      const data = response?.result || response
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['commissions'] })
         addNotification({ type: 'success', message: '佣金付款成功' })

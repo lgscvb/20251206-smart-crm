@@ -81,6 +81,14 @@ export function useContracts(params = {}) {
   })
 }
 
+export function useContractDetail(contractId) {
+  return useQuery({
+    queryKey: ['contract', contractId],
+    queryFn: () => crm.getContractDetail(contractId),
+    enabled: !!contractId
+  })
+}
+
 // ============================================================================
 // 繳費相關 Hooks
 // ============================================================================

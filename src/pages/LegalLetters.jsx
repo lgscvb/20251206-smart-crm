@@ -443,7 +443,7 @@ export default function LegalLetters() {
 
       {/* 建立存證信函 Modal */}
       <Modal
-        isOpen={showCreateModal}
+        open={showCreateModal}
         onClose={() => {
           setShowCreateModal(false)
           setGeneratedContent('')
@@ -525,7 +525,7 @@ export default function LegalLetters() {
 
       {/* 查看內容 Modal */}
       <Modal
-        isOpen={showContentModal}
+        open={showContentModal}
         onClose={() => {
           setShowContentModal(false)
           setSelectedLetter(null)
@@ -563,7 +563,7 @@ export default function LegalLetters() {
 
       {/* 更新狀態 Modal */}
       <Modal
-        isOpen={showStatusModal}
+        open={showStatusModal}
         onClose={() => {
           setShowStatusModal(false)
           setStatusForm({ status: '', approvedBy: '', trackingNumber: '', notes: '' })

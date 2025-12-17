@@ -283,7 +283,7 @@ export default function Customers() {
         columns={columns}
         data={customers || []}
         loading={isLoading}
-        onRowClick={(row) => navigate(`/customers/${row.id}`)}
+        onRowClick={(row) => navigate(`/contracts?customer_id=${row.id}`)}
         onRefresh={refetch}
         pageSize={pageSize}
         emptyMessage="沒有找到客戶資料"

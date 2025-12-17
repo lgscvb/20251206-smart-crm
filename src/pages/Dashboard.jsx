@@ -12,13 +12,46 @@ import {
   Building2,
   DollarSign,
   CheckCircle,
-  Clock
+  Clock,
+  Zap
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import Badge, { StatusBadge } from '../components/Badge'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444']
+
+// ============================================================================
+// 續約 Checklist 相關：從時間戳計算狀態
+// ============================================================================
+
+function computeFlags(contract) {
+  return {
+    is_notified: !!contract.renewal_notified_at,
+    is_confirmed: !!contract.renewal_confirmed_at,
+    is_paid: !!contract.renewal_paid_at,
+    is_signed: !!contract.renewal_signed_at,
+    is_invoiced: contract.invoice_status && contract.invoice_status !== 'pending_tax_id'
+  }
+}
+
+function getDisplayStatus(contract) {
+  const flags = computeFlags(contract)
+
+  // 檢查是否全部完成
+  const allDone = flags.is_notified && flags.is_confirmed &&
+    flags.is_paid && flags.is_invoiced && flags.is_signed
+  if (allDone) return { stage: 'completed', progress: 5 }
+
+  // 檢查是否尚未開始
+  const noneStarted = !flags.is_notified && !flags.is_confirmed &&
+    !flags.is_paid && !flags.is_invoiced && !flags.is_signed
+  if (noneStarted) return { stage: 'pending', progress: 0 }
+
+  // 進行中
+  const progress = [flags.is_notified, flags.is_confirmed, flags.is_paid, flags.is_invoiced, flags.is_signed].filter(Boolean).length
+  return { stage: 'in_progress', progress }
+}
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -116,37 +149,54 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* 續約狀態統計 */}
-      {renewals?.length > 0 && (
-        <div className="card cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/renewals')}>
-          <div className="card-header">
-            <h3 className="card-title flex items-center gap-2">
-              <Bell className="w-5 h-5 text-orange-500" />
-              續約追蹤（45天內到期）
-            </h3>
-            <Badge variant="warning">{renewals.length} 份</Badge>
+      {/* 續約狀態統計 - 4 階段模式 */}
+      {renewals?.length > 0 && (() => {
+        // 計算各階段數量
+        const stageCounts = renewals.reduce((acc, r) => {
+          const status = getDisplayStatus(r)
+          acc[status.stage] = (acc[status.stage] || 0) + 1
+          // 急件：7 天內到期且未完成
+          if (r.days_until_expiry <= 7 && status.stage !== 'completed') {
+            acc.urgent = (acc.urgent || 0) + 1
+          }
+          return acc
+        }, { pending: 0, in_progress: 0, completed: 0, urgent: 0 })
+
+        return (
+          <div className="card cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/renewals')}>
+            <div className="card-header">
+              <h3 className="card-title flex items-center gap-2">
+                <Bell className="w-5 h-5 text-orange-500" />
+                續約追蹤（45天內到期）
+              </h3>
+              <Badge variant="warning">{renewals.length} 份</Badge>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {/* 急件 */}
+              <div className="bg-red-100 text-red-700 rounded-lg p-3 text-center relative">
+                <Zap className="w-4 h-4 absolute top-2 right-2 opacity-50" />
+                <div className="text-2xl font-bold">{stageCounts.urgent}</div>
+                <div className="text-xs">急件（7天內）</div>
+              </div>
+              {/* 待處理 */}
+              <div className="bg-gray-100 text-gray-700 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold">{stageCounts.pending}</div>
+                <div className="text-xs">待處理</div>
+              </div>
+              {/* 進行中 */}
+              <div className="bg-blue-100 text-blue-700 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold">{stageCounts.in_progress}</div>
+                <div className="text-xs">進行中</div>
+              </div>
+              {/* 已完成 */}
+              <div className="bg-green-100 text-green-700 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold">{stageCounts.completed}</div>
+                <div className="text-xs">已完成</div>
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-            {[
-              { status: 'none', label: '待處理', color: 'bg-gray-100 text-gray-700' },
-              { status: 'notified', label: '待回覆', color: 'bg-blue-100 text-blue-700' },
-              { status: 'confirmed', label: '已確認', color: 'bg-purple-100 text-purple-700' },
-              { status: 'paid', label: '已收款', color: 'bg-green-100 text-green-700' },
-              { status: 'invoiced', label: '已開票', color: 'bg-teal-100 text-teal-700' },
-              { status: 'signed', label: '待回簽', color: 'bg-orange-100 text-orange-700' },
-              { status: 'completed', label: '完成', color: 'bg-emerald-100 text-emerald-700' }
-            ].map(({ status, label, color }) => {
-              const count = renewals.filter(r => (r.renewal_status || 'none') === status).length
-              return (
-                <div key={status} className={`${color} rounded-lg p-3 text-center`}>
-                  <div className="text-2xl font-bold">{count}</div>
-                  <div className="text-xs">{label}</div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* 圖表區 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

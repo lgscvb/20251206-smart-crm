@@ -1,12 +1,10 @@
 import axios from 'axios'
 
 // API 路由設計說明
-// - 開發環境：baseURL = /proxy（Vite proxy 轉發到本地 MCP Server）
-// - 正式環境：baseURL = ''（直接發 /api/db/xxx，由 Cloudflare + Nginx 處理）
-const isDev = import.meta.env.DEV
-// 正式環境不需要 baseURL，直接發 /api/db/xxx（單層路徑）
-// Cloudflare + Nginx 會正確處理
-const API_BASE = isDev ? '/proxy' : ''
+// - 使用 VITE_API_BASE_URL 環境變數統一管理
+// - 開發環境：.env.development（可指向本機或線上 auto.yourspce.org）
+// - 正式環境：.env.production（https://auto.yourspce.org via Cloudflare Tunnel）
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -46,11 +44,8 @@ api.interceptors.response.use(
 
 export const callTool = async (toolName, parameters = {}, config = {}) => {
   // MCP Server 使用 "tool" 欄位而非 "name"
-  // 開發環境：/proxy/tools/call（Vite proxy）
-  // 正式環境：/api/tools/call → nginx proxy → auto.yourspce.org/tools/call
-  const isDev = import.meta.env.DEV
-  const endpoint = isDev ? '/tools/call' : '/api/tools/call'
-  const response = await api.post(endpoint, { tool: toolName, parameters }, config)
+  // 統一使用 /tools/call，baseURL 已包含完整域名
+  const response = await api.post('/tools/call', { tool: toolName, parameters }, config)
   return response
 }
 
@@ -67,11 +62,9 @@ export const aiChat = async (messages, model = 'claude-sonnet-4') => {
 
 // 串流版本的 AI Chat
 export const aiChatStream = async (messages, model, onChunk, onTool, onDone, onError) => {
-  // nginx 代理：/ai/ → auto.yourspce.org/ai/
-  const baseUrl = import.meta.env.DEV ? '/proxy' : ''
-
+  // 使用環境變數統一管理 baseURL
   try {
-    const response = await fetch(`${baseUrl}/ai/chat/stream`, {
+    const response = await fetch(`${API_BASE}/ai/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages, model })

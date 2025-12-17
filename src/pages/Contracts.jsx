@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useContracts } from '../hooks/useApi'
 import { crm } from '../services/api'
 import DataTable from '../components/DataTable'
 import Badge, { StatusBadge } from '../components/Badge'
-import { FileText, Calendar, DollarSign, FileX, Settings2, ChevronDown, FileDown, Loader2, ExternalLink } from 'lucide-react'
+import { FileText, Calendar, DollarSign, FileX, Settings2, ChevronDown, FileDown, Loader2, ExternalLink, X } from 'lucide-react'
 
 // 可選欄位定義（# 和合約編號固定顯示）
 const OPTIONAL_COLUMNS = {
@@ -22,6 +22,8 @@ const OPTIONAL_COLUMNS = {
 
 export default function Contracts() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const customerIdFilter = searchParams.get('customer_id')
   const [statusFilter, setStatusFilter] = useState('')
   const [pageSize, setPageSize] = useState(15)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
@@ -34,17 +36,24 @@ export default function Contracts() {
     setPdfResult(null)
     try {
       const result = await crm.generateContractPdf(contractId)
-      if (result.success && result.pdf_url) {
+      // API 回應結構: { success, tool, result: { success, pdf_url } }
+      const pdfUrl = result?.result?.pdf_url || result?.pdf_url
+      const isSuccess = result?.result?.success || result?.success
+      const expiresAt = result?.result?.expires_at || result?.expires_at
+      const message = result?.result?.message || result?.message
+
+      if (isSuccess && pdfUrl) {
         setPdfResult({
           contractId,
-          url: result.pdf_url,
-          expiresAt: result.expires_at,
-          message: result.message
+          url: pdfUrl,
+          expiresAt,
+          message
         })
         // 自動開啟下載連結
-        window.open(result.pdf_url, '_blank')
+        window.open(pdfUrl, '_blank')
       } else {
-        alert(result.message || '生成失敗')
+        const errorMsg = result?.result?.error || message || '生成失敗'
+        alert(errorMsg)
       }
     } catch (error) {
       console.error('生成合約 PDF 失敗:', error)
@@ -66,6 +75,7 @@ export default function Contracts() {
   const { data: contracts, isLoading, refetch } = useContracts({
     // 預設排除已到期和已取消的合約
     status: statusFilter ? `eq.${statusFilter}` : 'in.(active,pending)',
+    customer_id: customerIdFilter ? `eq.${customerIdFilter}` : undefined,
     limit: 100
   })
 
@@ -299,6 +309,19 @@ export default function Contracts() {
       {/* 篩選 */}
       <div className="card">
         <div className="flex flex-wrap items-center gap-4">
+          {/* 客戶篩選提示 */}
+          {customerIdFilter && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-primary-50 text-primary-700 rounded-lg text-sm">
+              <span>篩選：{contracts?.[0]?.customers?.name || '客戶'} 的合約</span>
+              <button
+                onClick={() => setSearchParams({})}
+                className="p-0.5 hover:bg-primary-100 rounded"
+                title="清除篩選"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <label htmlFor="contract-status-filter" className="text-sm text-gray-600">狀態：</label>
             <select
@@ -386,6 +409,7 @@ export default function Contracts() {
         onRefresh={refetch}
         pageSize={pageSize}
         emptyMessage="沒有合約資料"
+        onRowClick={(row) => navigate(`/contracts/${row.id}`)}
       />
     </div>
   )

@@ -5,6 +5,8 @@ import useStore from '../store/useStore'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import Badge, { StatusBadge } from '../components/Badge'
+import { pdf } from '@react-pdf/renderer'
+import QuotePDF from '../components/pdf/QuotePDF'
 import {
   FileText,
   Plus,
@@ -76,7 +78,7 @@ export default function Quotes() {
     items: [{ name: '商登月租費', quantity: 12, unit_price: 5000, amount: 60000 }],
     discount_amount: 0,
     discount_note: '',
-    deposit_amount: 0,
+    deposit_amount: 6000,
     valid_days: 30,
     internal_notes: '',
     customer_notes: ''
@@ -106,7 +108,8 @@ export default function Quotes() {
   // 建立報價單
   const createQuote = useMutation({
     mutationFn: (data) => callTool('quote_create', data),
-    onSuccess: (data) => {
+    onSuccess: (response) => {
+      const data = response?.result || response
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['quotes'] })
         addNotification({ type: 'success', message: '報價單建立成功' })
@@ -124,7 +127,8 @@ export default function Quotes() {
   // 更新報價單狀態
   const updateStatus = useMutation({
     mutationFn: ({ quoteId, status }) => callTool('quote_update_status', { quote_id: quoteId, status }),
-    onSuccess: (data) => {
+    onSuccess: (response) => {
+      const data = response?.result || response
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['quotes'] })
         addNotification({ type: 'success', message: '狀態更新成功' })
@@ -137,7 +141,8 @@ export default function Quotes() {
   // 刪除報價單
   const deleteQuote = useMutation({
     mutationFn: (quoteId) => callTool('quote_delete', { quote_id: quoteId }),
-    onSuccess: (data) => {
+    onSuccess: (response) => {
+      const data = response?.result || response
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['quotes'] })
         addNotification({ type: 'success', message: '報價單已刪除' })
@@ -151,7 +156,8 @@ export default function Quotes() {
   // 轉換為合約
   const convertToContract = useMutation({
     mutationFn: (quoteId) => callTool('quote_convert_to_contract', { quote_id: quoteId }),
-    onSuccess: (data) => {
+    onSuccess: (response) => {
+      const data = response?.result || response
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['quotes'] })
         queryClient.invalidateQueries({ queryKey: ['contracts'] })
@@ -169,17 +175,36 @@ export default function Quotes() {
     }
   })
 
-  // 生成報價單 PDF
-  const handleGeneratePdf = async (quoteId) => {
-    setGeneratingPdf(quoteId)
+  // 生成報價單 PDF (前端生成)
+  const handleGeneratePdf = async (quote) => {
+    setGeneratingPdf(quote.id)
     try {
-      const result = await crm.generateQuotePdf(quoteId)
-      if (result.success && result.pdf_url) {
-        addNotification({ type: 'success', message: '報價單 PDF 生成成功' })
-        window.open(result.pdf_url, '_blank')
-      } else {
-        addNotification({ type: 'error', message: result.message || '生成失敗' })
+      // 準備 PDF 資料
+      const pdfData = {
+        quote_number: quote.quote_number,
+        valid_from: quote.valid_from,
+        valid_until: quote.valid_until,
+        branch_name: quote.branch_name || '台中館',
+        plan_name: quote.plan_name,
+        items: typeof quote.items === 'string' ? JSON.parse(quote.items) : (quote.items || []),
+        deposit_amount: quote.deposit_amount ?? 6000,
+        total_amount: quote.total_amount || 0,
+        // 根據分館設定銀行資訊
+        bank_account_name: '你的空間有限公司',
+        bank_name: '永豐商業銀行(南台中分行)',
+        bank_code: '807',
+        bank_account_number: '03801800183399',
+        contact_email: 'wtxg@hourjungle.com',
+        contact_phone: '04-23760282'
       }
+
+      // 前端生成 PDF
+      const blob = await pdf(<QuotePDF data={pdfData} />).toBlob()
+      const url = URL.createObjectURL(blob)
+
+      // 開啟新視窗顯示 PDF
+      window.open(url, '_blank')
+      addNotification({ type: 'success', message: '報價單 PDF 生成成功' })
     } catch (error) {
       console.error('生成報價單 PDF 失敗:', error)
       addNotification({ type: 'error', message: '生成報價單 PDF 失敗: ' + (error.message || '未知錯誤') })
@@ -201,7 +226,7 @@ export default function Quotes() {
       items: [{ name: '商登月租費', quantity: 12, unit_price: 5000, amount: 60000 }],
       discount_amount: 0,
       discount_note: '',
-      deposit_amount: 0,
+      deposit_amount: 6000,
       valid_days: 30,
       internal_notes: '',
       customer_notes: ''
@@ -263,8 +288,8 @@ export default function Quotes() {
   const subtotal = form.items.reduce((sum, item) => sum + (item.amount || 0), 0)
   const total = subtotal - (parseFloat(form.discount_amount) || 0)
 
-  const quotes = quotesData?.quotes || []
-  const stats = quotesData?.stats || {}
+  const quotes = quotesData?.result?.quotes || quotesData?.quotes || []
+  const stats = quotesData?.result?.stats || quotesData?.stats || {}
 
   const columns = [
     {
@@ -360,7 +385,7 @@ export default function Quotes() {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              handleGeneratePdf(row.id)
+              handleGeneratePdf(row)
             }}
             disabled={generatingPdf === row.id}
             className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg disabled:opacity-50"
