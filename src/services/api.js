@@ -374,9 +374,9 @@ export const crm = {
         start_date: data.start_date,
         end_date: data.end_date,
         monthly_rent: data.monthly_rent,
-        deposit_amount: data.deposit_amount || 0,
+        deposit: data.deposit_amount || 0,
         payment_cycle: data.payment_cycle || 'monthly',
-        payment_day: data.payment_day || 5,
+        payment_day: data.payment_day || 8,
         status: 'active',
         // 新架構欄位：承租人資訊
         company_name: data.company_name || null,
