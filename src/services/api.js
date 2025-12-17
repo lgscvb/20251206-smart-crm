@@ -32,7 +32,7 @@ api.interceptors.response.use(
   (error) => {
     // 靜默處理預期的 404 錯誤（如後端尚未實作的可選端點）
     const isExpected404 = error.response?.status === 404 &&
-      error.config?.url?.includes('/api/ai/models')
+      error.config?.url?.includes('/ai/models')
     if (!isExpected404) {
       console.error('API Error:', error)
     }
@@ -46,8 +46,11 @@ api.interceptors.response.use(
 
 export const callTool = async (toolName, parameters = {}, config = {}) => {
   // MCP Server 使用 "tool" 欄位而非 "name"
-  // 正確端點是 /tools/call（不是 /api/tools/call）
-  const response = await api.post('/tools/call', { tool: toolName, parameters }, config)
+  // 開發環境：/proxy/tools/call（Vite proxy）
+  // 正式環境：/api/tools/call → nginx proxy → auto.yourspce.org/tools/call
+  const isDev = import.meta.env.DEV
+  const endpoint = isDev ? '/tools/call' : '/api/tools/call'
+  const response = await api.post(endpoint, { tool: toolName, parameters }, config)
   return response
 }
 
@@ -57,13 +60,15 @@ export const callTool = async (toolName, parameters = {}, config = {}) => {
 
 export const aiChat = async (messages, model = 'claude-sonnet-4') => {
   // 呼叫 MCP Server 的 AI Chat 端點（AI 回應需要較長時間）
-  const response = await api.post('/api/ai/chat', { messages, model }, { timeout: 120000 })
+  // nginx 代理：/ai/ → auto.yourspce.org/ai/
+  const response = await api.post('/ai/chat', { messages, model }, { timeout: 120000 })
   return response
 }
 
 // 串流版本的 AI Chat
 export const aiChatStream = async (messages, model, onChunk, onTool, onDone, onError) => {
-  const baseUrl = import.meta.env.DEV ? '/proxy' : '/api'
+  // nginx 代理：/ai/ → auto.yourspce.org/ai/
+  const baseUrl = import.meta.env.DEV ? '/proxy' : ''
 
   try {
     const response = await fetch(`${baseUrl}/ai/chat/stream`, {
@@ -114,8 +119,9 @@ export const aiChatStream = async (messages, model, onChunk, onTool, onDone, onE
 
 export const getAIModels = async () => {
   // 取得可用的 AI 模型列表
+  // nginx 代理：/ai/ → auto.yourspce.org/ai/
   try {
-    const response = await api.get('/api/ai/models')
+    const response = await api.get('/ai/models')
     return response
   } catch {
     // 後端未實作此端點時，返回空值讓前端使用備用選項

@@ -44,7 +44,8 @@ export default function Invoices() {
     queryFn: () => db.getBranches()
   })
 
-  // 取得發票列表（已付款但尚未開發票 + 已開發票）
+  // 取得發票列表（已付款的繳費記錄）
+  // 注意：invoice_number, invoice_date, invoice_status, tax_id 欄位尚未在資料庫建立
   const { data: invoices = [], isLoading, refetch } = useQuery({
     queryKey: ['invoices', branchFilter, statusFilter, dateRange],
     queryFn: async () => {
@@ -52,12 +53,13 @@ export default function Invoices() {
         payment_status: 'eq.paid',
         order: 'paid_at.desc',
         limit: 200,
-        select: 'id,customer_id,branch_id,payment_period,amount,due_date,paid_at,invoice_number,invoice_date,invoice_status,notes,customer:customers(name,company_name,tax_id),branch:branches(name)'
+        select: 'id,customer_id,branch_id,payment_period,amount,due_date,paid_at,payment_method,notes,customer:customers(name,company_name),branch:branches(name)'
       }
 
       if (branchFilter) params.branch_id = `eq.${branchFilter}`
-      if (statusFilter === 'issued') params.invoice_number = 'not.is.null'
-      if (statusFilter === 'pending') params.invoice_number = 'is.null'
+      // 暫時停用發票狀態篩選（欄位不存在）
+      // if (statusFilter === 'issued') params.invoice_number = 'not.is.null'
+      // if (statusFilter === 'pending') params.invoice_number = 'is.null'
       if (dateRange.start) params.paid_at = `gte.${dateRange.start}`
       if (dateRange.end) {
         if (params.paid_at) {
@@ -77,7 +79,8 @@ export default function Invoices() {
     mutationFn: async (data) => {
       return callTool('invoice_create', data)
     },
-    onSuccess: (result) => {
+    onSuccess: (response) => {
+      const result = response?.result || response
       if (result.success) {
         alert(`發票開立成功！\n發票號碼：${result.invoice_number}`)
         queryClient.invalidateQueries(['invoices'])
@@ -97,7 +100,8 @@ export default function Invoices() {
     mutationFn: async (data) => {
       return callTool('invoice_void', data)
     },
-    onSuccess: (result) => {
+    onSuccess: (response) => {
+      const result = response?.result || response
       if (result.success) {
         alert(`發票 ${result.invoice_number} 已作廢`)
         queryClient.invalidateQueries(['invoices'])
@@ -114,7 +118,8 @@ export default function Invoices() {
     mutationFn: async (data) => {
       return callTool('invoice_allowance', data)
     },
-    onSuccess: (result) => {
+    onSuccess: (response) => {
+      const result = response?.result || response
       if (result.success) {
         alert(`折讓單開立成功！\n折讓單號：${result.allowance_number}`)
         queryClient.invalidateQueries(['invoices'])
