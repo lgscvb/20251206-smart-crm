@@ -659,7 +659,7 @@ export default function Contracts() {
           </button>
 
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => navigate('/contracts/new')}
             className="btn-primary"
           >
             <Plus className="w-4 h-4 mr-2" />

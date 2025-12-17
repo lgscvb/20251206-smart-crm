@@ -343,7 +343,72 @@ export const crm = {
   },
 
   async createContract(data) {
-    return callTool('crm_create_contract', data)
+    // 直接使用 PostgREST 建立合約（支援新架構欄位）
+    try {
+      // 生成合約編號（格式：HJ-YYYYMM-XXX）
+      const now = new Date()
+      const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
+
+      // 查詢當月最大編號
+      const existingContracts = await api.get('/api/db/contracts', {
+        params: {
+          contract_number: `like.HJ-${yearMonth}-%`,
+          select: 'contract_number',
+          order: 'contract_number.desc',
+          limit: 1
+        }
+      })
+
+      let nextNum = 1
+      if (existingContracts && existingContracts.length > 0) {
+        const lastNum = parseInt(existingContracts[0].contract_number.split('-')[2]) || 0
+        nextNum = lastNum + 1
+      }
+      const contractNumber = `HJ-${yearMonth}-${String(nextNum).padStart(3, '0')}`
+
+      // 準備合約資料
+      const contractData = {
+        contract_number: contractNumber,
+        branch_id: data.branch_id,
+        contract_type: data.contract_type,
+        start_date: data.start_date,
+        end_date: data.end_date,
+        monthly_rent: data.monthly_rent,
+        deposit_amount: data.deposit_amount || 0,
+        payment_cycle: data.payment_cycle || 'monthly',
+        payment_day: data.payment_day || 5,
+        status: 'active',
+        // 新架構欄位：承租人資訊
+        company_name: data.company_name || null,
+        representative_name: data.representative_name || null,
+        representative_address: data.representative_address || null,
+        id_number: data.id_number || null,
+        company_tax_id: data.company_tax_id || null,
+        phone: data.phone || null,
+        email: data.email || null,
+        original_price: data.original_price || null,
+        notes: data.notes || null
+      }
+
+      // 插入合約（觸發器會自動建立/關聯客戶）
+      const result = await api.post('/api/db/contracts', contractData, {
+        headers: { 'Prefer': 'return=representation' }
+      })
+
+      const contract = Array.isArray(result) ? result[0] : result
+      return {
+        success: true,
+        contract_id: contract?.id,
+        contract_number: contract?.contract_number,
+        data: contract
+      }
+    } catch (error) {
+      console.error('建立合約失敗:', error)
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message || '建立失敗'
+      }
+    }
   },
 
   async getContractDetail(contractId) {

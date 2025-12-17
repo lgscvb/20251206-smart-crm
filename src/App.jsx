@@ -20,6 +20,7 @@ import AIAssistant from './pages/AIAssistant'
 import DataValidation from './pages/DataValidation'
 import Bookings from './pages/Bookings'
 import FloorPlan from './pages/FloorPlan'
+import ContractCreate from './pages/ContractCreate'
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
         <Route path="customers/churned" element={<ChurnedCustomers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="contracts" element={<Contracts />} />
+        <Route path="contracts/new" element={<ContractCreate />} />
         <Route path="contracts/expired" element={<ExpiredContracts />} />
         <Route path="contracts/:id" element={<ContractDetail />} />
         <Route path="payments/legal-letters" element={<LegalLetters />} />
