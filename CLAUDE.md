@@ -357,3 +357,131 @@ server {
 - **問題**：API 請求返回 405
 - **原因**：Cloudflare 強制 HTTPS，nginx proxy_pass 用 HTTP 會失敗
 - **解決**：proxy_pass 使用 `https://` + `proxy_ssl_server_name on`
+
+### Nginx proxy_pass Trailing Slash
+- **問題**：`/api/api/users` 路徑災難
+- **原因**：proxy_pass 結尾沒有斜線，導致 location 路徑被保留
+- **解決**：
+  ```nginx
+  # ❌ 錯誤：/api/tools/call → /api/tools/call（路徑被保留）
+  location /api/tools/ {
+      proxy_pass https://auto.yourspce.org;
+  }
+
+  # ✅ 正確：/api/tools/call → /tools/call（路徑被剝離）
+  location /api/tools/ {
+      proxy_pass https://auto.yourspce.org/tools/;  # 注意結尾斜線
+  }
+  ```
+
+### 環境變數地獄（本地 vs 正式環境）
+- **問題**：本地開發用 `localhost`，git push 後要改成正式 URL，容易出錯
+- **解決**：環境變數 + Vite Dev Proxy（見下方）
+
+---
+
+## 環境變數策略
+
+### 黃金準則
+**程式碼裡永遠不要寫死 (Hardcode) 網址**
+
+### .env 檔案配置
+
+```bash
+# .env.development（本地開發，不要 commit）
+VITE_API_URL=
+
+# .env.production（正式環境）
+VITE_API_URL=
+```
+
+### API 客戶端使用方式
+
+```javascript
+// src/services/api.js
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '',  // 空字串 = 同網域
+  timeout: 30000
+})
+```
+
+### Vite Dev Proxy（本地開發代理）
+
+```javascript
+// vite.config.js
+export default defineConfig({
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'https://auto.yourspce.org',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
+  }
+})
+```
+
+**工作原理**：
+1. 本地開發：`/api/db/customers` → Vite 代理 → `https://auto.yourspce.org/db/customers`
+2. 正式環境：`/api/db/customers` → Nginx 代理 → 後端
+
+---
+
+## Cloudflare Tunnel 策略（進階）
+
+### 為什麼用 Cloudflare Tunnel？
+
+| 傳統 Nginx | Cloudflare Tunnel |
+|-----------|-------------------|
+| 開 Port 443 等人進來 | 主動挖地道連去 Cloudflare |
+| 需要管理 SSL 憑證 | Cloudflare 處理 SSL |
+| 需要設定防火牆 | 外網連不到，只有 Tunnel 能連 |
+| 路徑重寫地獄 | UI 設定直觀 |
+
+### 子網域策略（推薦）
+
+用「子網域」取代「路徑重寫」，徹底消滅 `/api/api` 問題：
+
+| 服務 | 子網域 | 內部目標 |
+|------|--------|----------|
+| CRM 前端 | `hj.yourspce.org` | `localhost:80` |
+| MCP Server | `auto.yourspce.org` | `localhost:8000` |
+| PostgREST | `db.yourspce.org`（可選） | `localhost:3000` |
+
+### 設定步驟
+
+```bash
+# 1. 安裝 cloudflared
+brew install cloudflared  # macOS
+
+# 2. 登入 Cloudflare
+cloudflared tunnel login
+
+# 3. 建立 Tunnel
+cloudflared tunnel create hourjungle
+
+# 4. 設定 config.yml
+cat > ~/.cloudflared/config.yml << 'EOF'
+tunnel: <TUNNEL_ID>
+credentials-file: ~/.cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: hj.yourspce.org
+    service: http://localhost:80
+  - hostname: auto.yourspce.org
+    service: http://localhost:8000
+  - service: http_status:404
+EOF
+
+# 5. 執行 Tunnel
+cloudflared tunnel run hourjungle
+```
+
+### DNS 設定
+
+在 Cloudflare Dashboard 設定 CNAME：
+- `hj.yourspce.org` → `<TUNNEL_ID>.cfargotunnel.com`
+- `auto.yourspce.org` → `<TUNNEL_ID>.cfargotunnel.com`
