@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useContracts } from '../hooks/useApi'
+import { useContracts, useCustomers } from '../hooks/useApi'
 import { crm } from '../services/api'
 import DataTable from '../components/DataTable'
+import Modal from '../components/Modal'
 import Badge, { StatusBadge } from '../components/Badge'
-import { FileText, Calendar, DollarSign, FileX, Settings2, ChevronDown, FileDown, Loader2, ExternalLink, X } from 'lucide-react'
+import { FileText, Calendar, DollarSign, FileX, Settings2, ChevronDown, FileDown, Loader2, ExternalLink, X, Plus } from 'lucide-react'
 
 // 可選欄位定義（# 和合約編號固定顯示）
 const OPTIONAL_COLUMNS = {
@@ -20,6 +21,20 @@ const OPTIONAL_COLUMNS = {
   actions: { label: '操作', default: true }
 }
 
+// 初始合約表單
+const INITIAL_CONTRACT_FORM = {
+  customer_id: '',
+  branch_id: 1,
+  contract_type: 'virtual_office',
+  start_date: new Date().toISOString().split('T')[0],
+  end_date: '',
+  monthly_rent: '',
+  deposit: '',
+  payment_cycle: 'monthly',
+  payment_day: 5,
+  position_number: ''
+}
+
 export default function Contracts() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -29,6 +44,14 @@ export default function Contracts() {
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(null) // 正在生成 PDF 的合約 ID
   const [pdfResult, setPdfResult] = useState(null) // PDF 生成結果
+
+  // 新增合約相關
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [contractForm, setContractForm] = useState(INITIAL_CONTRACT_FORM)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // 取得客戶列表（供下拉選單）
+  const { data: customers } = useCustomers({ limit: 500 })
 
   // 生成合約 PDF
   const handleGeneratePdf = async (contractId) => {
@@ -60,6 +83,58 @@ export default function Contracts() {
       alert('生成合約 PDF 失敗: ' + (error.message || '未知錯誤'))
     } finally {
       setGeneratingPdf(null)
+    }
+  }
+
+  // 新增合約
+  const handleCreateContract = async (e) => {
+    e.preventDefault()
+    if (!contractForm.customer_id) {
+      alert('請選擇客戶')
+      return
+    }
+    if (!contractForm.start_date || !contractForm.end_date) {
+      alert('請填寫合約期間')
+      return
+    }
+    if (!contractForm.monthly_rent) {
+      alert('請填寫月租金額')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const result = await crm.createContract({
+        customer_id: parseInt(contractForm.customer_id),
+        branch_id: parseInt(contractForm.branch_id),
+        contract_type: contractForm.contract_type,
+        start_date: contractForm.start_date,
+        end_date: contractForm.end_date,
+        monthly_rent: parseFloat(contractForm.monthly_rent),
+        deposit: parseFloat(contractForm.deposit) || 0,
+        payment_cycle: contractForm.payment_cycle,
+        payment_day: parseInt(contractForm.payment_day),
+        position_number: contractForm.position_number ? parseInt(contractForm.position_number) : null
+      })
+
+      if (result?.success || result?.result?.success) {
+        alert('合約建立成功！')
+        setShowAddModal(false)
+        setContractForm(INITIAL_CONTRACT_FORM)
+        refetch()
+        // 導航到新合約詳情頁
+        const newContractId = result?.result?.contract_id || result?.contract_id
+        if (newContractId) {
+          navigate(`/contracts/${newContractId}`)
+        }
+      } else {
+        alert('建立失敗: ' + (result?.result?.error || result?.error || '未知錯誤'))
+      }
+    } catch (error) {
+      console.error('建立合約失敗:', error)
+      alert('建立合約失敗: ' + (error.message || '未知錯誤'))
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -398,6 +473,14 @@ export default function Contracts() {
             <FileX className="w-4 h-4 mr-2" />
             已結束合約
           </button>
+
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="btn-primary"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            新增合約
+          </button>
         </div>
       </div>
 
@@ -411,6 +494,191 @@ export default function Contracts() {
         emptyMessage="沒有合約資料"
         onRowClick={(row) => navigate(`/contracts/${row.id}`)}
       />
+
+      {/* 新增合約 Modal */}
+      <Modal
+        open={showAddModal}
+        onClose={() => {
+          setShowAddModal(false)
+          setContractForm(INITIAL_CONTRACT_FORM)
+        }}
+        title="新增合約"
+        size="lg"
+      >
+        <form onSubmit={handleCreateContract} className="space-y-4">
+          {/* 客戶選擇 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              客戶 <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={contractForm.customer_id}
+              onChange={(e) => setContractForm(prev => ({ ...prev, customer_id: e.target.value }))}
+              className="input w-full"
+              required
+            >
+              <option value="">選擇客戶</option>
+              {(customers || []).map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name} {c.company_name ? `(${c.company_name})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 合約類型 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">合約類型</label>
+              <select
+                value={contractForm.contract_type}
+                onChange={(e) => setContractForm(prev => ({ ...prev, contract_type: e.target.value }))}
+                className="input w-full"
+              >
+                <option value="virtual_office">虛擬辦公室</option>
+                <option value="shared_space">共享空間</option>
+                <option value="meeting_room">會議室</option>
+                <option value="mailbox">郵件代收</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">分館</label>
+              <select
+                value={contractForm.branch_id}
+                onChange={(e) => setContractForm(prev => ({ ...prev, branch_id: e.target.value }))}
+                className="input w-full"
+              >
+                <option value="1">大忠館</option>
+                <option value="2">環瑞館</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 合約期間 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                起始日期 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={contractForm.start_date}
+                onChange={(e) => setContractForm(prev => ({ ...prev, start_date: e.target.value }))}
+                className="input w-full"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                結束日期 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={contractForm.end_date}
+                onChange={(e) => setContractForm(prev => ({ ...prev, end_date: e.target.value }))}
+                className="input w-full"
+                required
+              />
+            </div>
+          </div>
+
+          {/* 金額 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                月租金額 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                value={contractForm.monthly_rent}
+                onChange={(e) => setContractForm(prev => ({ ...prev, monthly_rent: e.target.value }))}
+                className="input w-full"
+                placeholder="例如：1690"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">押金</label>
+              <input
+                type="number"
+                value={contractForm.deposit}
+                onChange={(e) => setContractForm(prev => ({ ...prev, deposit: e.target.value }))}
+                className="input w-full"
+                placeholder="例如：3000"
+              />
+            </div>
+          </div>
+
+          {/* 繳費週期和位置 */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">繳費週期</label>
+              <select
+                value={contractForm.payment_cycle}
+                onChange={(e) => setContractForm(prev => ({ ...prev, payment_cycle: e.target.value }))}
+                className="input w-full"
+              >
+                <option value="monthly">月繳</option>
+                <option value="quarterly">季繳</option>
+                <option value="semi_annual">半年繳</option>
+                <option value="annual">年繳</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">繳費日</label>
+              <input
+                type="number"
+                value={contractForm.payment_day}
+                onChange={(e) => setContractForm(prev => ({ ...prev, payment_day: e.target.value }))}
+                className="input w-full"
+                min="1"
+                max="28"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">位置編號</label>
+              <input
+                type="number"
+                value={contractForm.position_number}
+                onChange={(e) => setContractForm(prev => ({ ...prev, position_number: e.target.value }))}
+                className="input w-full"
+                placeholder="選填"
+              />
+            </div>
+          </div>
+
+          {/* 按鈕 */}
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddModal(false)
+                setContractForm(INITIAL_CONTRACT_FORM)
+              }}
+              className="btn-secondary"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn-primary"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  建立中...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  建立合約
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }
