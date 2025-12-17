@@ -9,16 +9,16 @@ import {
   Image
 } from '@react-pdf/renderer'
 
-// 註冊中文字體（使用 Google Fonts CDN）
+// 註冊中文字體（使用本地子集化字體）
 Font.register({
   family: 'NotoSansTC',
   fonts: [
     {
-      src: 'https://fonts.gstatic.com/s/notosanstc/v35/-nFuOG829Oofr2wohFbTp9ifNAn722rq0MXz76Cy_CpOtma3uNQ.ttf',
+      src: '/fonts/NotoSansTC-Regular-Subset.ttf',
       fontWeight: 'normal'
     },
     {
-      src: 'https://fonts.gstatic.com/s/notosanstc/v35/-nFuOG829Oofr2wohFbTp9ifNAn722rq0MXz7_-x_CpOtma3uNQ.ttf',
+      src: '/fonts/NotoSansTC-Bold-Subset.ttf',
       fontWeight: 'bold'
     }
   ]

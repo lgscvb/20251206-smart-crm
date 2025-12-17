@@ -426,6 +426,7 @@ export default function FloorPlan() {
                 alt="Floor Plan"
                 className="block w-full h-full"
                 draggable={false}
+                crossOrigin="anonymous"
               />
             ) : (
               <div
