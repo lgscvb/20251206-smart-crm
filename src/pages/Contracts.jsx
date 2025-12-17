@@ -365,7 +365,7 @@ export default function Contracts() {
       accessor: 'contract_type',
       cell: (row) => {
         const types = {
-          virtual_office: '虛擬辦公室',
+          virtual_office: '營業登記',
           shared_space: '共享空間',
           meeting_room: '會議室',
           mailbox: '郵件代收'
@@ -787,7 +787,7 @@ export default function Contracts() {
                   onChange={(e) => setContractForm(prev => ({ ...prev, contract_type: e.target.value }))}
                   className="input w-full"
                 >
-                  <option value="virtual_office">虛擬辦公室</option>
+                  <option value="virtual_office">營業登記</option>
                   <option value="coworking_fixed">固定座位</option>
                   <option value="coworking_flexible">彈性座位</option>
                   <option value="meeting_room">會議室</option>

@@ -51,7 +51,7 @@ const STATUS_VARIANTS = {
 
 // 合約類型
 const CONTRACT_TYPES = {
-  virtual_office: '虛擬辦公室',
+  virtual_office: '營業登記',
   coworking_fixed: '固定座位',
   coworking_flexible: '彈性座位',
   meeting_room: '會議室'

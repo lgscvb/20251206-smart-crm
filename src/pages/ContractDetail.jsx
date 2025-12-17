@@ -1,10 +1,14 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useContractDetail, useRecordPayment, useSendPaymentReminder, useUpdateCustomer } from '../hooks/useApi'
 import { crm } from '../services/api'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { pdf } from '@react-pdf/renderer'
 import Modal from '../components/Modal'
 import Badge, { StatusBadge } from '../components/Badge'
+import ContractPDF from '../components/pdf/ContractPDF'
+import OfficePDF from '../components/pdf/OfficePDF'
+import FlexSeatPDF from '../components/pdf/FlexSeatPDF'
 import {
   ArrowLeft,
   Edit2,
@@ -30,9 +34,28 @@ import {
   Receipt,
   PenTool,
   ChevronDown,
-  FileDown,
-  ExternalLink
+  FileDown
 } from 'lucide-react'
+
+// 分館資料（含法人資訊）
+const BRANCHES = {
+  1: {
+    name: '大忠館',
+    company_name: '你的空間有限公司',
+    tax_id: '83772050',
+    representative: '戴豪廷',
+    address: '台中市西區大忠南街55號7F-5',
+    court: '台南地方法院'
+  },
+  2: {
+    name: '環瑞館',
+    company_name: '樞紐前沿股份有限公司',
+    tax_id: '60710368',
+    representative: '戴豪廷',
+    address: '臺中市西區台灣大道二段181號4樓之1',
+    court: '台中地方法院'
+  }
+}
 
 // ============================================================================
 // Checklist 相關：Computed Flags 和 Display Status
@@ -267,7 +290,7 @@ function ProgressBar({ progress, stage }) {
 
 // 合約類型對照
 const CONTRACT_TYPES = {
-  virtual_office: '虛擬辦公室',
+  virtual_office: '營業登記',
   shared_space: '共享空間',
   coworking_fixed: '固定座位',
   coworking_flexible: '自由座位',
@@ -306,7 +329,6 @@ export default function ContractDetail() {
   const [showChecklistPopover, setShowChecklistPopover] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [generatingPdf, setGeneratingPdf] = useState(false)
-  const [pdfResult, setPdfResult] = useState(null)
   const [paymentForm, setPaymentForm] = useState({
     payment_method: 'transfer',
     reference: ''
@@ -420,30 +442,78 @@ export default function ContractDetail() {
     refetch()
   }
 
-  // 生成合約 PDF
-  const handleGeneratePdf = async () => {
-    if (!contract?.id) return
-    setGeneratingPdf(true)
-    setPdfResult(null)
-    try {
-      const result = await crm.generateContractPdf(contract.id)
-      const pdfUrl = result?.result?.pdf_url || result?.pdf_url
-      const isSuccess = result?.result?.success || result?.success
-      const expiresAt = result?.result?.expires_at || result?.expires_at
-      const message = result?.result?.message || result?.message
+  // 計算合約月數
+  const calculateMonths = (startDate, endDate) => {
+    if (!startDate || !endDate) return 12
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
+    return months > 0 ? months : 12
+  }
 
-      if (isSuccess && pdfUrl) {
-        setPdfResult({
-          url: pdfUrl,
-          expiresAt,
-          message
-        })
-        // 自動開啟下載連結
-        window.open(pdfUrl, '_blank')
+  // 準備 PDF 資料
+  const pdfData = useMemo(() => {
+    if (!contract || !branch) return null
+    const branchInfo = BRANCHES[contract.branch_id] || BRANCHES[1]
+    return {
+      // 合約類型
+      contract_type: contract.contract_type,
+      // 甲方資訊（從分館帶入）
+      branch_company_name: branchInfo.company_name,
+      branch_tax_id: branchInfo.tax_id,
+      branch_representative: branchInfo.representative,
+      branch_address: branchInfo.address,
+      branch_court: branchInfo.court,
+      branch_id: contract.branch_id,
+      room_number: contract.room_number || '',
+      // 乙方資訊（優先使用合約儲存的，fallback 到客戶資料）
+      company_name: contract.company_name || customer?.company_name || '',
+      representative_name: contract.representative_name || customer?.name || '',
+      representative_address: contract.representative_address || customer?.address || '',
+      id_number: contract.id_number || customer?.id_number || '',
+      company_tax_id: contract.company_tax_id || customer?.company_tax_id || '',
+      phone: contract.phone || customer?.phone || '',
+      email: contract.email || customer?.email || '',
+      // 租賃條件
+      start_date: contract.start_date,
+      end_date: contract.end_date,
+      periods: calculateMonths(contract.start_date, contract.end_date),
+      original_price: parseFloat(contract.original_price) || 0,
+      monthly_rent: parseFloat(contract.monthly_rent) || 0,
+      deposit_amount: parseFloat(contract.deposit) || 0,
+      payment_day: parseInt(contract.payment_day) || 8,
+      // 電子用印
+      show_stamp: true
+    }
+  }, [contract, branch, customer])
+
+  // 生成合約 PDF（前端生成）
+  const handleGeneratePdf = async () => {
+    if (!contract || !pdfData) return
+    setGeneratingPdf(true)
+    try {
+      // 根據合約類型選擇 PDF 組件
+      let PdfComponent
+      if (contract.contract_type === 'office') {
+        PdfComponent = OfficePDF
+      } else if (contract.contract_type === 'flex_seat') {
+        PdfComponent = FlexSeatPDF
       } else {
-        const errorMsg = result?.result?.error || message || '生成失敗'
-        alert(errorMsg)
+        PdfComponent = ContractPDF
       }
+
+      // 生成 PDF blob
+      const blob = await pdf(<PdfComponent data={pdfData} />).toBlob()
+
+      // 建立下載連結
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `合約_${contract.contract_number}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
     } catch (error) {
       console.error('生成合約 PDF 失敗:', error)
       alert('生成合約 PDF 失敗: ' + (error.message || '未知錯誤'))
@@ -499,7 +569,7 @@ export default function ContractDetail() {
         </button>
         <button
           onClick={handleGeneratePdf}
-          disabled={generatingPdf}
+          disabled={generatingPdf || !pdfData}
           className="btn-primary"
           title="下載合約 PDF"
         >
@@ -510,17 +580,6 @@ export default function ContractDetail() {
           )}
           {generatingPdf ? '生成中...' : '下載 PDF'}
         </button>
-        {pdfResult?.url && (
-          <a
-            href={pdfResult.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-secondary"
-            title="開啟 PDF"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </a>
-        )}
       </div>
 
       {/* 主要內容 */}

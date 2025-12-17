@@ -93,7 +93,7 @@ export default function ExpiredContracts() {
       accessor: 'contract_type',
       cell: (row) => {
         const types = {
-          virtual_office: '虛擬辦公室',
+          virtual_office: '營業登記',
           shared_space: '共享空間',
           meeting_room: '會議室',
           mailbox: '郵件代收'
