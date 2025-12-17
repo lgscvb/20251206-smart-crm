@@ -8,16 +8,16 @@ import {
   Font
 } from '@react-pdf/renderer'
 
-// 註冊中文字體 (使用子集化字體)
+// 註冊中文字體 (使用完整字體以支援所有中文字)
 Font.register({
   family: 'NotoSansTC',
   fonts: [
     {
-      src: '/fonts/NotoSansTC-Regular-Subset.ttf',
+      src: '/fonts/NotoSansTC-Regular.ttf',
       fontWeight: 'normal'
     },
     {
-      src: '/fonts/NotoSansTC-Bold-Subset.ttf',
+      src: '/fonts/NotoSansTC-Bold.ttf',
       fontWeight: 'bold'
     }
   ]
