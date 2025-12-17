@@ -7,7 +7,31 @@ import useStore from '../store/useStore'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import Badge, { StatusBadge } from '../components/Badge'
-import { FileText, Calendar, DollarSign, FileX, Settings2, ChevronDown, FileDown, Loader2, ExternalLink, X, Plus, RefreshCw, Edit3 } from 'lucide-react'
+import { pdf } from '@react-pdf/renderer'
+import ContractPDF from '../components/pdf/ContractPDF'
+import OfficePDF from '../components/pdf/OfficePDF'
+import FlexSeatPDF from '../components/pdf/FlexSeatPDF'
+import { FileText, Calendar, DollarSign, FileX, Settings2, ChevronDown, FileDown, Loader2, X, Plus, RefreshCw, Edit3 } from 'lucide-react'
+
+// 分館資料（含法人資訊）
+const BRANCHES = {
+  1: {
+    name: '大忠館',
+    company_name: '你的空間有限公司',
+    tax_id: '83772050',
+    representative: '戴豪廷',
+    address: '台中市西區大忠南街55號7F-5',
+    court: '台南地方法院'
+  },
+  2: {
+    name: '環瑞館',
+    company_name: '樞紐前沿股份有限公司',
+    tax_id: '60710368',
+    representative: '戴豪廷',
+    address: '臺中市西區台灣大道二段181號4樓之1',
+    court: '台中地方法院'
+  }
+}
 
 // 可選欄位定義（# 和合約編號固定顯示）
 const OPTIONAL_COLUMNS = {
@@ -54,7 +78,6 @@ export default function Contracts() {
   const [pageSize, setPageSize] = useState(15)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(null) // 正在生成 PDF 的合約 ID
-  const [pdfResult, setPdfResult] = useState(null) // PDF 生成結果
 
   // 新增合約相關
   const [showAddModal, setShowAddModal] = useState(false)
@@ -203,31 +226,81 @@ export default function Contracts() {
     })
   }
 
-  // 生成合約 PDF
+  // 計算合約月數
+  const calculateMonths = (startDate, endDate) => {
+    if (!startDate || !endDate) return 12
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
+    return months > 0 ? months : 12
+  }
+
+  // 生成合約 PDF（前端生成）
   const handleGeneratePdf = async (contractId) => {
     setGeneratingPdf(contractId)
-    setPdfResult(null)
     try {
-      const result = await crm.generateContractPdf(contractId)
-      // API 回應結構: { success, tool, result: { success, pdf_url } }
-      const pdfUrl = result?.result?.pdf_url || result?.pdf_url
-      const isSuccess = result?.result?.success || result?.success
-      const expiresAt = result?.result?.expires_at || result?.expires_at
-      const message = result?.result?.message || result?.message
-
-      if (isSuccess && pdfUrl) {
-        setPdfResult({
-          contractId,
-          url: pdfUrl,
-          expiresAt,
-          message
-        })
-        // 自動開啟下載連結
-        window.open(pdfUrl, '_blank')
-      } else {
-        const errorMsg = result?.result?.error || message || '生成失敗'
-        alert(errorMsg)
+      // 先獲取完整合約資料
+      const result = await crm.getContractDetail(contractId)
+      if (!result?.success) {
+        throw new Error(result?.error || '無法取得合約資料')
       }
+
+      const contract = result.data?.contract
+      const customer = result.data?.customer
+      if (!contract) {
+        throw new Error('合約資料不存在')
+      }
+
+      // 準備 PDF 資料
+      const branchInfo = BRANCHES[contract.branch_id] || BRANCHES[1]
+      const pdfData = {
+        contract_type: contract.contract_type,
+        branch_company_name: branchInfo.company_name,
+        branch_tax_id: branchInfo.tax_id,
+        branch_representative: branchInfo.representative,
+        branch_address: branchInfo.address,
+        branch_court: branchInfo.court,
+        branch_id: contract.branch_id,
+        room_number: contract.room_number || '',
+        company_name: contract.company_name || customer?.company_name || '',
+        representative_name: contract.representative_name || customer?.name || '',
+        representative_address: contract.representative_address || customer?.address || '',
+        id_number: contract.id_number || customer?.id_number || '',
+        company_tax_id: contract.company_tax_id || customer?.company_tax_id || '',
+        phone: contract.phone || customer?.phone || '',
+        email: contract.email || customer?.email || '',
+        start_date: contract.start_date,
+        end_date: contract.end_date,
+        periods: calculateMonths(contract.start_date, contract.end_date),
+        original_price: parseFloat(contract.original_price) || 0,
+        monthly_rent: parseFloat(contract.monthly_rent) || 0,
+        deposit_amount: parseFloat(contract.deposit) || 0,
+        payment_day: parseInt(contract.payment_day) || 8,
+        show_stamp: true
+      }
+
+      // 根據合約類型選擇 PDF 組件
+      let PdfComponent
+      if (contract.contract_type === 'office') {
+        PdfComponent = OfficePDF
+      } else if (contract.contract_type === 'flex_seat') {
+        PdfComponent = FlexSeatPDF
+      } else {
+        PdfComponent = ContractPDF
+      }
+
+      // 生成 PDF blob
+      const blob = await pdf(<PdfComponent data={pdfData} />).toBlob()
+
+      // 建立下載連結
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `合約_${contract.contract_number}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
     } catch (error) {
       console.error('生成合約 PDF 失敗:', error)
       alert('生成合約 PDF 失敗: ' + (error.message || '未知錯誤'))
@@ -465,17 +538,6 @@ export default function Contracts() {
               <FileDown className="w-4 h-4" />
             )}
           </button>
-          {pdfResult?.contractId === row.id && (
-            <a
-              href={pdfResult.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-1.5 text-primary-600 hover:bg-primary-50 rounded-lg"
-              title="開啟 PDF"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </a>
-          )}
           {/* 續約（只有 active 或 expired 可續約） */}
           {(row.status === 'active' || row.status === 'expired') && (
             <button
