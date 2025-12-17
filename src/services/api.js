@@ -30,7 +30,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    console.error('API Error:', error)
+    // 靜默處理預期的 404 錯誤（如後端尚未實作的可選端點）
+    const isExpected404 = error.response?.status === 404 &&
+      error.config?.url?.includes('/api/ai/models')
+    if (!isExpected404) {
+      console.error('API Error:', error)
+    }
     return Promise.reject(error)
   }
 )
@@ -109,8 +114,13 @@ export const aiChatStream = async (messages, model, onChunk, onTool, onDone, onE
 
 export const getAIModels = async () => {
   // 取得可用的 AI 模型列表
-  const response = await api.get('/api/ai/models')
-  return response
+  try {
+    const response = await api.get('/api/ai/models')
+    return response
+  } catch {
+    // 後端未實作此端點時，返回空值讓前端使用備用選項
+    return null
+  }
 }
 
 // ============================================================================
@@ -169,7 +179,7 @@ export const db = {
     const data = await api.get('/api/db/payments', {
       params: {
         payment_status: 'eq.paid',
-        select: 'id,customer_id,branch_id,payment_period,amount,due_date,paid_at,payment_method,reference,notes,customer:customers(name,company_name),branch:branches(name)',
+        select: 'id,customer_id,branch_id,payment_period,amount,due_date,paid_at,payment_method,notes,customer:customers(name,company_name),branch:branches(name)',
         order: 'paid_at.desc',
         limit: 50,
         ...params
