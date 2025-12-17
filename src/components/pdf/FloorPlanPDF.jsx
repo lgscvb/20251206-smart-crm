@@ -5,24 +5,9 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
   Image
 } from '@react-pdf/renderer'
-
-// 註冊中文字體（使用完整字體以支援所有中文字，用不同名稱避免衝突）
-Font.register({
-  family: 'NotoSansTCFull',
-  fonts: [
-    {
-      src: '/fonts/NotoSansTC-Regular.ttf',
-      fontWeight: 'normal'
-    },
-    {
-      src: '/fonts/NotoSansTC-Bold.ttf',
-      fontWeight: 'bold'
-    }
-  ]
-})
+// 字體在 main.jsx 統一註冊（NotoSansTCFull）
 
 // 樣式定義
 const styles = StyleSheet.create({

@@ -4,6 +4,8 @@ import { PDFViewer } from '@react-pdf/renderer'
 import { crm } from '../services/api'
 import useStore from '../store/useStore'
 import ContractPDF from '../components/pdf/ContractPDF'
+import OfficePDF from '../components/pdf/OfficePDF'
+import FlexSeatPDF from '../components/pdf/FlexSeatPDF'
 import { ArrowLeft, Loader2, Save, AlertTriangle, FileText } from 'lucide-react'
 
 // 預設值
@@ -43,6 +45,7 @@ const getInitialForm = () => {
     // 合約資訊
     branch_id: 1,
     contract_type: 'virtual_office',
+    room_number: '', // 辦公室房號（僅辦公室租賃需要）
     start_date: today,
     end_date: calculateEndDate(today, 12),
     contract_months: 12,
@@ -75,12 +78,11 @@ const BRANCHES = {
   }
 }
 
-// 合約類型
+// 合約類型（業務項目）
 const CONTRACT_TYPES = {
-  virtual_office: '虛擬辦公室',
-  coworking_fixed: '固定座位',
-  coworking_flexible: '彈性座位',
-  meeting_room: '會議室'
+  virtual_office: { label: '營業登記', hasDeposit: true, hasOriginalPrice: true, hasEndDate: true, hasRoom: false },
+  office: { label: '辦公室租賃', hasDeposit: true, hasOriginalPrice: true, hasEndDate: true, hasRoom: true },
+  flex_seat: { label: '自由座', hasDeposit: false, hasOriginalPrice: false, hasEndDate: false, hasRoom: false }
 }
 
 export default function ContractCreate() {
@@ -93,15 +95,34 @@ export default function ContractCreate() {
   const [showOriginalPriceWarning, setShowOriginalPriceWarning] = useState(false)
   const [depositLocked, setDepositLocked] = useState(true)
   const [showDepositWarning, setShowDepositWarning] = useState(false)
+  const [showStamp, setShowStamp] = useState(false) // 電子用印
+
+  // 取得當前合約類型的設定
+  const contractTypeConfig = CONTRACT_TYPES[form.contract_type] || CONTRACT_TYPES.virtual_office
 
   // 更新表單欄位
   const updateForm = (field, value) => {
     setForm(prev => {
       const updated = { ...prev, [field]: value }
 
-      // 起始日期變更時，自動計算結束日期
+      // 合約類型變更時，處理 end_date
+      if (field === 'contract_type') {
+        const typeConfig = CONTRACT_TYPES[value] || CONTRACT_TYPES.virtual_office
+        if (!typeConfig.hasEndDate) {
+          // 自由座：設為 9999-12-31（長期合約）
+          updated.end_date = '9999-12-31'
+        } else {
+          // 其他類型：重新計算結束日期
+          updated.end_date = calculateEndDate(prev.start_date, prev.contract_months)
+        }
+      }
+
+      // 起始日期變更時，自動計算結束日期（僅限有結束日的合約類型）
       if (field === 'start_date') {
-        updated.end_date = calculateEndDate(value, prev.contract_months)
+        const typeConfig = CONTRACT_TYPES[prev.contract_type] || CONTRACT_TYPES.virtual_office
+        if (typeConfig.hasEndDate) {
+          updated.end_date = calculateEndDate(value, prev.contract_months)
+        }
       }
 
       // 合約月數變更時，重新計算結束日期
@@ -147,12 +168,16 @@ export default function ContractCreate() {
   const pdfData = useMemo(() => {
     const branch = BRANCHES[form.branch_id] || BRANCHES[1]
     return {
+      // 合約類型
+      contract_type: form.contract_type,
       // 甲方資訊（從分館帶入）
       branch_company_name: branch.company_name,
       branch_tax_id: branch.tax_id,
       branch_representative: branch.representative,
       branch_address: branch.address,
       branch_court: branch.court,
+      branch_id: form.branch_id,
+      room_number: form.room_number, // 辦公室房號
       // 乙方資訊
       company_name: form.company_name,
       representative_name: form.representative_name,
@@ -167,10 +192,12 @@ export default function ContractCreate() {
       periods: calculateMonths(form.start_date, form.end_date),
       original_price: parseFloat(form.original_price) || 0,
       monthly_rent: parseFloat(form.monthly_rent) || 0,
-      deposit_amount: parseFloat(form.deposit_amount) || 0,
-      payment_day: parseInt(form.payment_day) || 8
+      deposit_amount: contractTypeConfig.hasDeposit ? (parseFloat(form.deposit_amount) || 0) : 0,
+      payment_day: parseInt(form.payment_day) || 8,
+      // 電子用印
+      show_stamp: showStamp
     }
-  }, [form])
+  }, [form, showStamp, contractTypeConfig])
 
   // 提交表單
   const handleSubmit = async (e) => {
@@ -376,14 +403,14 @@ export default function ContractCreate() {
 
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">合約類型</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">業務項目</label>
                   <select
                     value={form.contract_type}
                     onChange={(e) => updateForm('contract_type', e.target.value)}
                     className="input w-full"
                   >
-                    {Object.entries(CONTRACT_TYPES).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
+                    {Object.entries(CONTRACT_TYPES).map(([value, config]) => (
+                      <option key={value} value={value}>{config.label}</option>
                     ))}
                   </select>
                 </div>
@@ -401,66 +428,135 @@ export default function ContractCreate() {
                 </div>
               </div>
 
+              {/* 房號（僅辦公室租賃需要） */}
+              {contractTypeConfig.hasRoom && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    房號 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.room_number}
+                    onChange={(e) => updateForm('room_number', e.target.value)}
+                    className="input w-full"
+                    placeholder="例如：A室、B室"
+                  />
+                </div>
+              )}
+
               {/* 合約期間 */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    起始日期 <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={form.start_date}
-                    onChange={(e) => updateForm('start_date', e.target.value)}
-                    className="input w-full"
-                    required
-                  />
+              {contractTypeConfig.hasEndDate ? (
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      起始日期 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={form.start_date}
+                      onChange={(e) => updateForm('start_date', e.target.value)}
+                      className="input w-full"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">合約長度</label>
+                    <select
+                      value={form.contract_months}
+                      onChange={(e) => updateForm('contract_months', e.target.value)}
+                      className="input w-full"
+                    >
+                      <option value={6}>6 個月</option>
+                      <option value={12}>1 年（12 個月）</option>
+                      <option value={24}>2 年（24 個月）</option>
+                      <option value={36}>3 年（36 個月）</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      結束日期
+                    </label>
+                    <input
+                      type="date"
+                      value={form.end_date}
+                      onChange={(e) => updateForm('end_date', e.target.value)}
+                      className="input w-full bg-gray-50"
+                      readOnly
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">合約長度</label>
-                  <select
-                    value={form.contract_months}
-                    onChange={(e) => updateForm('contract_months', e.target.value)}
-                    className="input w-full"
-                  >
-                    <option value={6}>6 個月</option>
-                    <option value={12}>1 年（12 個月）</option>
-                    <option value={24}>2 年（24 個月）</option>
-                    <option value={36}>3 年（36 個月）</option>
-                  </select>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      起始日期 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={form.start_date}
+                      onChange={(e) => updateForm('start_date', e.target.value)}
+                      className="input w-full"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">租期說明</label>
+                    <div className="input w-full bg-gray-50 text-gray-600">月租，自動續約</div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    結束日期
-                  </label>
-                  <input
-                    type="date"
-                    value={form.end_date}
-                    onChange={(e) => updateForm('end_date', e.target.value)}
-                    className="input w-full bg-gray-50"
-                    readOnly
-                  />
-                </div>
-              </div>
+              )}
 
               {/* 金額 */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    定價（原價）
-                    {originalPriceLocked && (
-                      <span className="ml-1 text-xs text-yellow-600">(已鎖定)</span>
-                    )}
-                  </label>
-                  <input
-                    type="number"
-                    value={form.original_price}
-                    onChange={(e) => handleOriginalPriceChange(e.target.value)}
-                    onFocus={() => originalPriceLocked && setShowOriginalPriceWarning(true)}
-                    className={`input w-full ${originalPriceLocked ? 'bg-yellow-50 cursor-pointer' : ''}`}
-                    readOnly={originalPriceLocked}
-                  />
+              {contractTypeConfig.hasOriginalPrice ? (
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      定價（原價）
+                      {originalPriceLocked && (
+                        <span className="ml-1 text-xs text-yellow-600">(已鎖定)</span>
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      value={form.original_price}
+                      onChange={(e) => handleOriginalPriceChange(e.target.value)}
+                      onFocus={() => originalPriceLocked && setShowOriginalPriceWarning(true)}
+                      className={`input w-full ${originalPriceLocked ? 'bg-yellow-50 cursor-pointer' : ''}`}
+                      readOnly={originalPriceLocked}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      月租金額 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={form.monthly_rent}
+                      onChange={(e) => updateForm('monthly_rent', e.target.value)}
+                      className="input w-full"
+                      placeholder="折扣後月租"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      押金
+                      {depositLocked && (
+                        <span className="ml-1 text-xs text-yellow-600">(已鎖定)</span>
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      value={form.deposit_amount}
+                      onChange={(e) => handleDepositChange(e.target.value)}
+                      onFocus={() => depositLocked && setShowDepositWarning(true)}
+                      className={`input w-full ${depositLocked ? 'bg-yellow-50 cursor-pointer' : ''}`}
+                      readOnly={depositLocked}
+                    />
+                  </div>
                 </div>
-                <div>
+              ) : (
+                <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     月租金額 <span className="text-red-500">*</span>
                   </label>
@@ -469,27 +565,11 @@ export default function ContractCreate() {
                     value={form.monthly_rent}
                     onChange={(e) => updateForm('monthly_rent', e.target.value)}
                     className="input w-full"
-                    placeholder="實際月租"
+                    placeholder="每月租金"
                     required
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    押金
-                    {depositLocked && (
-                      <span className="ml-1 text-xs text-yellow-600">(已鎖定)</span>
-                    )}
-                  </label>
-                  <input
-                    type="number"
-                    value={form.deposit_amount}
-                    onChange={(e) => handleDepositChange(e.target.value)}
-                    onFocus={() => depositLocked && setShowDepositWarning(true)}
-                    className={`input w-full ${depositLocked ? 'bg-yellow-50 cursor-pointer' : ''}`}
-                    readOnly={depositLocked}
-                  />
-                </div>
-              </div>
+              )}
 
               {/* 繳費週期 */}
               <div className="grid grid-cols-2 gap-3">
@@ -521,12 +601,29 @@ export default function ContractCreate() {
               </div>
             </div>
 
-            {/* 備註 */}
+            {/* 備註與選項 */}
             <div className="card">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <span className="w-6 h-6 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center text-sm">3</span>
                 其他約定事項
               </h3>
+
+              {/* 電子用印選項 */}
+              <div className="mb-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showStamp}
+                    onChange={(e) => setShowStamp(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div>
+                    <span className="font-medium text-gray-900">電子用印</span>
+                    <p className="text-sm text-gray-500">勾選後合約 PDF 將自動加蓋公司印章（適用於線上續約客戶）</p>
+                  </div>
+                </label>
+              </div>
+
               <textarea
                 value={form.notes}
                 onChange={(e) => updateForm('notes', e.target.value)}
@@ -542,7 +639,9 @@ export default function ContractCreate() {
         <div className="bg-gray-100 rounded-lg overflow-hidden flex flex-col">
           <div className="bg-gray-200 px-4 py-2 flex items-center gap-2">
             <FileText className="w-4 h-4 text-gray-600" />
-            <span className="text-sm font-medium text-gray-700">合約預覽</span>
+            <span className="text-sm font-medium text-gray-700">
+              合約預覽 - {contractTypeConfig.label}
+            </span>
           </div>
           <div className="flex-1 min-h-0">
             <PDFViewer
@@ -551,7 +650,13 @@ export default function ContractCreate() {
               showToolbar={false}
               className="border-0"
             >
-              <ContractPDF data={pdfData} />
+              {form.contract_type === 'office' ? (
+                <OfficePDF data={pdfData} />
+              ) : form.contract_type === 'flex_seat' ? (
+                <FlexSeatPDF data={pdfData} />
+              ) : (
+                <ContractPDF data={pdfData} />
+              )}
             </PDFViewer>
           </div>
         </div>

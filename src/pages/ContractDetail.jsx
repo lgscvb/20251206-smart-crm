@@ -3,10 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useContractDetail, useRecordPayment, useSendPaymentReminder, useUpdateCustomer } from '../hooks/useApi'
 import { crm } from '../services/api'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { pdf } from '@react-pdf/renderer'
 import Modal from '../components/Modal'
 import Badge, { StatusBadge } from '../components/Badge'
-import ContractPDF from '../components/pdf/ContractPDF'
 import {
   ArrowLeft,
   Edit2,
@@ -24,7 +22,6 @@ import {
   CheckCircle,
   AlertTriangle,
   Send,
-  FileDown,
   Loader2,
   Save,
   X,
@@ -32,7 +29,9 @@ import {
   Bell,
   Receipt,
   PenTool,
-  ChevronDown
+  ChevronDown,
+  FileDown,
+  ExternalLink
 } from 'lucide-react'
 
 // ============================================================================
@@ -307,6 +306,7 @@ export default function ContractDetail() {
   const [showChecklistPopover, setShowChecklistPopover] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [generatingPdf, setGeneratingPdf] = useState(false)
+  const [pdfResult, setPdfResult] = useState(null)
   const [paymentForm, setPaymentForm] = useState({
     payment_method: 'transfer',
     reference: ''
@@ -374,54 +374,6 @@ export default function ContractDetail() {
     totalPending: payments.filter(p => p.payment_status === 'pending' || p.payment_status === 'overdue').reduce((sum, p) => sum + (p.amount || 0), 0)
   }
 
-  // 生成 PDF（前端生成，使用 @react-pdf/renderer）
-  const handleGeneratePdf = async () => {
-    setGeneratingPdf(true)
-    try {
-      // 準備合約 PDF 所需資料
-      const pdfData = {
-        contract_number: contract.contract_number || '',
-        branch_name: branch?.name || '台中館',
-        branch_address: contract.rental_address || branch?.address || '',
-        branch_phone: branch?.phone || '',
-        company_name: customer?.company_name || '',
-        customer_name: customer?.name || '',
-        tax_id: customer?.tax_id || '',
-        id_number: customer?.id_number || '',
-        company_address: customer?.address || '',
-        contact_phone: customer?.phone || '',
-        contact_email: customer?.email || '',
-        contract_type: contract.contract_type || 'coworking_fixed',
-        start_date: contract.start_date || '',
-        end_date: contract.end_date || '',
-        periods: contract.periods || 12,
-        list_price: contract.list_price || contract.monthly_rent || 0,
-        monthly_fee: contract.monthly_rent || 0,
-        payment_day: contract.payment_day || 5,
-        deposit: contract.deposit || 0,
-        notes: contract.notes || ''
-      }
-
-      // 使用 @react-pdf/renderer 生成 PDF blob
-      const blob = await pdf(<ContractPDF data={pdfData} />).toBlob()
-
-      // 建立下載連結
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `合約_${contract.contract_number || 'draft'}.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error('PDF 生成錯誤:', error)
-      alert('生成合約 PDF 失敗: ' + (error.message || '未知錯誤'))
-    } finally {
-      setGeneratingPdf(false)
-    }
-  }
-
   // 記錄繳費
   const handleRecordPayment = async () => {
     await recordPayment.mutateAsync({
@@ -468,6 +420,38 @@ export default function ContractDetail() {
     refetch()
   }
 
+  // 生成合約 PDF
+  const handleGeneratePdf = async () => {
+    if (!contract?.id) return
+    setGeneratingPdf(true)
+    setPdfResult(null)
+    try {
+      const result = await crm.generateContractPdf(contract.id)
+      const pdfUrl = result?.result?.pdf_url || result?.pdf_url
+      const isSuccess = result?.result?.success || result?.success
+      const expiresAt = result?.result?.expires_at || result?.expires_at
+      const message = result?.result?.message || result?.message
+
+      if (isSuccess && pdfUrl) {
+        setPdfResult({
+          url: pdfUrl,
+          expiresAt,
+          message
+        })
+        // 自動開啟下載連結
+        window.open(pdfUrl, '_blank')
+      } else {
+        const errorMsg = result?.result?.error || message || '生成失敗'
+        alert(errorMsg)
+      }
+    } catch (error) {
+      console.error('生成合約 PDF 失敗:', error)
+      alert('生成合約 PDF 失敗: ' + (error.message || '未知錯誤'))
+    } finally {
+      setGeneratingPdf(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -510,21 +494,33 @@ export default function ContractDetail() {
             {contract.plan_name && ` - ${contract.plan_name}`}
           </p>
         </div>
+        <button onClick={refetch} className="btn-secondary" title="重新整理">
+          <RefreshCw className="w-4 h-4" />
+        </button>
         <button
           onClick={handleGeneratePdf}
           disabled={generatingPdf}
-          className="btn-secondary"
+          className="btn-primary"
+          title="下載合約 PDF"
         >
           {generatingPdf ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            <Loader2 className="w-4 h-4 animate-spin mr-2" />
           ) : (
             <FileDown className="w-4 h-4 mr-2" />
           )}
-          {generatingPdf ? '生成中...' : '合約 PDF'}
+          {generatingPdf ? '生成中...' : '下載 PDF'}
         </button>
-        <button onClick={refetch} className="btn-secondary">
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        {pdfResult?.url && (
+          <a
+            href={pdfResult.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary"
+            title="開啟 PDF"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        )}
       </div>
 
       {/* 主要內容 */}

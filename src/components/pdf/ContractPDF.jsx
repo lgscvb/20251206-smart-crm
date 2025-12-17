@@ -4,69 +4,52 @@ import {
   Page,
   Text,
   View,
-  StyleSheet,
-  Font
+  Image,
+  StyleSheet
 } from '@react-pdf/renderer'
+// 字體在 main.jsx 統一註冊
 
-// 註冊中文字體 (使用完整字體以支援所有中文字)
-Font.register({
-  family: 'NotoSansTC',
-  fonts: [
-    {
-      src: '/fonts/NotoSansTC-Regular.ttf',
-      fontWeight: 'normal'
-    },
-    {
-      src: '/fonts/NotoSansTC-Bold.ttf',
-      fontWeight: 'bold'
-    }
-  ]
-})
-
-// 禁用連字符
-Font.registerHyphenationCallback(word => [word])
-
-// 樣式定義
+// 樣式定義 - 兩頁平均分佈版本
 const styles = StyleSheet.create({
   page: {
     fontFamily: 'NotoSansTC',
     fontSize: 9,
     padding: 40,
-    paddingTop: 25,
-    paddingBottom: 35,
+    paddingTop: 30,
+    paddingBottom: 40,
     backgroundColor: '#ffffff',
-    lineHeight: 1.5
+    lineHeight: 1.6
   },
   // Logo 區域
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 10
+    marginBottom: 12
   },
   logoText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#2d5016'
   },
   // 標題
   title: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 12
+    marginBottom: 16
   },
   // 立契約人區塊
   parties: {
-    marginBottom: 8
+    marginBottom: 12
   },
   partyLine: {
-    marginBottom: 2
+    marginBottom: 3
   },
   // 條款
   intro: {
-    marginBottom: 8
+    marginBottom: 12
   },
   article: {
-    marginBottom: 6
+    marginBottom: 10
   },
   articleTitle: {
     fontWeight: 'bold'
@@ -74,32 +57,32 @@ const styles = StyleSheet.create({
   // 子項目
   subItem: {
     marginLeft: 0,
-    marginBottom: 1
+    marginBottom: 2
   },
   // 簽名區
   signatureSection: {
-    marginTop: 15
+    marginTop: 20
   },
   signatureRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10
+    marginTop: 15
   },
   signatureBox: {
     width: '48%'
   },
   signatureLine: {
-    marginBottom: 6
+    marginBottom: 8
   },
   // 日期
   dateLine: {
     textAlign: 'right',
-    marginTop: 20
+    marginTop: 25
   },
   // 頁碼
   pageNumber: {
     position: 'absolute',
-    bottom: 15,
+    bottom: 20,
     left: 0,
     right: 0,
     textAlign: 'center',
@@ -129,6 +112,12 @@ const formatDateROC = (dateStr) => {
   return `${rocYear}年${String(month).padStart(2, '0')}月${String(day).padStart(2, '0')}日`
 }
 
+// 印章圖片路徑（根據分館不同）
+const STAMP_IMAGES = {
+  1: '/images/stamp-yourspace.png',      // 你的空間有限公司（大忠館）
+  2: '/images/stamp-pivotfrontier.png'   // 樞紐前沿股份有限公司（環瑞館）
+}
+
 // 合約 PDF 元件
 export default function ContractPDF({ data }) {
   const {
@@ -138,6 +127,7 @@ export default function ContractPDF({ data }) {
     branch_representative = '戴豪廷',
     branch_address = '',
     branch_court = '台中地方法院',
+    branch_id = 1,
     // 乙方資訊
     company_name = '',
     representative_name = '',
@@ -153,8 +143,13 @@ export default function ContractPDF({ data }) {
     original_price = 3000,
     monthly_rent = 0,
     payment_day = 8,
-    deposit_amount = 6000
+    deposit_amount = 6000,
+    // 電子用印
+    show_stamp = false
   } = data
+
+  // 取得印章圖片路徑
+  const stampImage = STAMP_IMAGES[branch_id] || STAMP_IMAGES[1]
 
   // 今日日期（民國）
   const today = new Date()
@@ -172,7 +167,7 @@ export default function ContractPDF({ data }) {
 
   return (
     <Document>
-      {/* 第一頁 */}
+      {/* 第一頁：條款 1-7 */}
       <Page size="A4" style={styles.page}>
         {/* Logo */}
         <View style={styles.logoContainer}>
@@ -245,6 +240,17 @@ export default function ContractPDF({ data }) {
           <Text style={styles.subItem}>七、甲方為使租賃標地物出租順利，並減輕乙方之租金負擔，特提供乙方之租賃優惠選擇方案（此優惠方案為自由選擇），若乙方違反合約限制或提前辦理退租，乙方無條件同意甲方將當初協議之優惠款項從押金中扣除。以原價{originalPriceStr}元/月計算</Text>
         </View>
 
+        {/* 頁碼 */}
+        <Text style={styles.pageNumber}>第1頁（共2頁）</Text>
+      </Page>
+
+      {/* 第二頁：條款 8-11 + 簽名區 */}
+      <Page size="A4" style={styles.page}>
+        {/* Logo */}
+        <View style={styles.logoContainer}>
+          <Text style={styles.logoText}>HOUR JUNGLE</Text>
+        </View>
+
         {/* 第八條 */}
         <View style={styles.article}>
           <Text style={styles.articleTitle}>第八條：應受強制執行之事項：</Text>
@@ -260,25 +266,12 @@ export default function ContractPDF({ data }) {
 
         {/* 第十條 */}
         <View style={styles.article}>
-          <Text style={styles.articleTitle}>第十條：連帶保證金</Text>
-          <Text style={{ marginLeft: 15 }}>乙方之負責人就本契約之相關責任（含營登租金及違約金）負連帶保證責任。</Text>
+          <Text><Text style={styles.articleTitle}>第十條：連帶保證金</Text> 乙方之負責人就本契約之相關責任（含營登租金及違約金）負連帶保證責任。</Text>
         </View>
 
         {/* 第十一條 */}
         <View style={styles.article}>
-          <Text style={styles.articleTitle}>第十一條：雙方確認事項</Text>
-          <Text style={{ marginLeft: 15 }}>甲乙雙方同意，因本契約事項所生之一切爭議，雙方同意以{branch_court}為第一審管轄法院</Text>
-        </View>
-
-        {/* 頁碼 */}
-        <Text style={styles.pageNumber}>第1頁（共2頁）</Text>
-      </Page>
-
-      {/* 第二頁 - 簽名頁 */}
-      <Page size="A4" style={styles.page}>
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <Text style={styles.logoText}>HOUR JUNGLE</Text>
+          <Text><Text style={styles.articleTitle}>第十一條：雙方確認事項</Text> 甲乙雙方同意，因本契約事項所生之一切爭議，雙方同意以{branch_court}為第一審管轄法院</Text>
         </View>
 
         {/* 簽名區 */}
@@ -291,12 +284,16 @@ export default function ContractPDF({ data }) {
               <Text style={styles.signatureLine}>負責人：{branch_representative}</Text>
             </View>
 
-            {/* 印章區域（空白） */}
-            <View style={{ width: 80, height: 80 }} />
+            {/* 印章區域 */}
+            {show_stamp ? (
+              <Image src={stampImage} />
+            ) : (
+              <View style={{ width: 120, height: 80 }} />
+            )}
           </View>
 
           {/* 乙方 */}
-          <View style={{ marginTop: 25 }}>
+          <View style={{ marginTop: 30 }}>
             <Text style={styles.signatureLine}>承租人公司名稱：{company_name}</Text>
             <Text style={styles.signatureLine}>負責人：{representative_name}</Text>
             <Text style={styles.signatureLine}>地址：{representative_address}</Text>

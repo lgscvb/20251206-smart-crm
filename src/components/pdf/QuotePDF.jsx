@@ -5,24 +5,9 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
   Link
 } from '@react-pdf/renderer'
-
-// 註冊中文字體 (使用子集化字體，214KB vs 原本 13.6MB)
-Font.register({
-  family: 'NotoSansTC',
-  fonts: [
-    {
-      src: '/fonts/NotoSansTC-Regular-Subset.ttf',
-      fontWeight: 'normal'
-    },
-    {
-      src: '/fonts/NotoSansTC-Bold-Subset.ttf',
-      fontWeight: 'bold'
-    }
-  ]
-})
+// 字體在 main.jsx 統一註冊
 
 // 樣式定義
 const styles = StyleSheet.create({
