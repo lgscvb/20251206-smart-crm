@@ -6,7 +6,8 @@ import useStore from '../store/useStore'
 import ContractPDF from '../components/pdf/ContractPDF'
 import { ArrowLeft, Loader2, Save, AlertTriangle, FileText } from 'lucide-react'
 
-// 預設押金
+// 預設值
+const DEFAULT_ORIGINAL_PRICE = 3000
 const DEFAULT_DEPOSIT = 6000
 
 // 計算結束日期（起始日 + N 個月）
@@ -45,19 +46,33 @@ const getInitialForm = () => {
     start_date: today,
     end_date: calculateEndDate(today, 12),
     contract_months: 12,
-    original_price: '',
+    original_price: DEFAULT_ORIGINAL_PRICE,
     monthly_rent: '',
     deposit_amount: DEFAULT_DEPOSIT,
     payment_cycle: 'monthly',
-    payment_day: 5,
+    payment_day: 8,
     notes: ''
   }
 }
 
-// 分館資料
+// 分館資料（含法人資訊）
 const BRANCHES = {
-  1: { name: '大忠館', address: '台中市西區大忠南街55號7F-5', phone: '04-2305-0508' },
-  2: { name: '環瑞館', address: '台中市西區環瑞街133號1樓', phone: '04-2305-0508' }
+  1: {
+    name: '大忠館',
+    company_name: '你的空間有限公司',
+    tax_id: '83772050',
+    representative: '戴豪廷',
+    address: '台中市西區大忠南街55號7F-5',
+    court: '台南地方法院'
+  },
+  2: {
+    name: '環瑞館',
+    company_name: '樞紐前沿股份有限公司',
+    tax_id: '60710368',
+    representative: '戴豪廷',
+    address: '臺中市西區台灣大道二段181號4樓之1',
+    court: '台中地方法院'
+  }
 }
 
 // 合約類型
@@ -74,6 +89,8 @@ export default function ContractCreate() {
 
   const [form, setForm] = useState(getInitialForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [originalPriceLocked, setOriginalPriceLocked] = useState(true)
+  const [showOriginalPriceWarning, setShowOriginalPriceWarning] = useState(false)
   const [depositLocked, setDepositLocked] = useState(true)
   const [showDepositWarning, setShowDepositWarning] = useState(false)
 
@@ -96,6 +113,21 @@ export default function ContractCreate() {
     })
   }
 
+  // 嘗試修改原價
+  const handleOriginalPriceChange = (value) => {
+    if (originalPriceLocked) {
+      setShowOriginalPriceWarning(true)
+    } else {
+      updateForm('original_price', value)
+    }
+  }
+
+  // 確認解鎖原價編輯
+  const confirmUnlockOriginalPrice = () => {
+    setOriginalPriceLocked(false)
+    setShowOriginalPriceWarning(false)
+  }
+
   // 嘗試修改押金
   const handleDepositChange = (value) => {
     if (depositLocked) {
@@ -115,10 +147,13 @@ export default function ContractCreate() {
   const pdfData = useMemo(() => {
     const branch = BRANCHES[form.branch_id] || BRANCHES[1]
     return {
-      contract_number: '（新合約）',
-      branch_name: branch.name,
+      // 甲方資訊（從分館帶入）
+      branch_company_name: branch.company_name,
+      branch_tax_id: branch.tax_id,
+      branch_representative: branch.representative,
       branch_address: branch.address,
-      branch_phone: branch.phone,
+      branch_court: branch.court,
+      // 乙方資訊
       company_name: form.company_name,
       representative_name: form.representative_name,
       representative_address: form.representative_address,
@@ -126,15 +161,14 @@ export default function ContractCreate() {
       company_tax_id: form.company_tax_id,
       phone: form.phone,
       email: form.email,
-      contract_type: form.contract_type,
+      // 租賃條件
       start_date: form.start_date,
       end_date: form.end_date,
       periods: calculateMonths(form.start_date, form.end_date),
       original_price: parseFloat(form.original_price) || 0,
       monthly_rent: parseFloat(form.monthly_rent) || 0,
       deposit_amount: parseFloat(form.deposit_amount) || 0,
-      payment_day: parseInt(form.payment_day) || 5,
-      notes: form.notes
+      payment_day: parseInt(form.payment_day) || 8
     }
   }, [form])
 
@@ -411,13 +445,19 @@ export default function ContractCreate() {
               {/* 金額 */}
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">定價（原價）</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    定價（原價）
+                    {originalPriceLocked && (
+                      <span className="ml-1 text-xs text-yellow-600">(已鎖定)</span>
+                    )}
+                  </label>
                   <input
                     type="number"
                     value={form.original_price}
-                    onChange={(e) => updateForm('original_price', e.target.value)}
-                    className="input w-full"
-                    placeholder="用於違約金"
+                    onChange={(e) => handleOriginalPriceChange(e.target.value)}
+                    onFocus={() => originalPriceLocked && setShowOriginalPriceWarning(true)}
+                    className={`input w-full ${originalPriceLocked ? 'bg-yellow-50 cursor-pointer' : ''}`}
+                    readOnly={originalPriceLocked}
                   />
                 </div>
                 <div>
@@ -516,6 +556,40 @@ export default function ContractCreate() {
           </div>
         </div>
       </div>
+
+      {/* 原價修改警告 Modal */}
+      {showOriginalPriceWarning && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-yellow-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">確認修改原價？</h3>
+                <p className="text-sm text-gray-500">原價預設為 $3,000</p>
+              </div>
+            </div>
+            <p className="text-gray-600 mb-6">
+              原價用於違約金計算。如果您確定要修改原價，請點擊「確認修改」按鈕。
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowOriginalPriceWarning(false)}
+                className="btn-secondary"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmUnlockOriginalPrice}
+                className="btn-primary bg-yellow-600 hover:bg-yellow-700"
+              >
+                確認修改
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 押金修改警告 Modal */}
       {showDepositWarning && (

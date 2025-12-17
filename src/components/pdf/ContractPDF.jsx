@@ -29,122 +29,88 @@ const styles = StyleSheet.create({
     fontFamily: 'NotoSansTC',
     fontSize: 10,
     padding: 50,
-    paddingLeft: 60,
-    paddingRight: 60,
+    paddingTop: 30,
+    paddingBottom: 40,
     backgroundColor: '#ffffff',
-    lineHeight: 1.8
+    lineHeight: 1.6
   },
-  header: {
-    textAlign: 'center',
-    marginBottom: 25
+  // Logo 區域
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 15
   },
-  title: {
-    fontSize: 16,
+  logoText: {
+    fontSize: 14,
     fontWeight: 'bold',
-    letterSpacing: 6
+    color: '#2d5016',
+    letterSpacing: 3
   },
-  contractNumber: {
-    textAlign: 'right',
-    fontSize: 9,
-    color: '#666666',
-    marginBottom: 15
+  // 標題
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 15,
+    letterSpacing: 4
   },
+  // 立契約人區塊
   parties: {
-    marginBottom: 20
+    marginBottom: 10
   },
-  partyRow: {
-    flexDirection: 'row',
-    marginBottom: 6
+  partyLine: {
+    marginBottom: 3
   },
-  partyLabel: {
-    width: 60,
-    fontWeight: 'bold'
-  },
-  partyValue: {
-    flex: 1
-  },
+  // 條款
   intro: {
-    textIndent: 20,
-    marginBottom: 15
+    marginBottom: 10
   },
   article: {
-    marginBottom: 15
+    marginBottom: 8
   },
   articleTitle: {
-    fontWeight: 'bold',
-    marginBottom: 6
+    fontWeight: 'bold'
   },
   articleContent: {
-    textIndent: 20,
     textAlign: 'justify'
   },
-  table: {
-    marginVertical: 10
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
-    minHeight: 28
-  },
-  tableHeader: {
-    width: 100,
-    backgroundColor: '#f5f5f5',
-    padding: 6,
-    borderRightWidth: 1,
-    borderRightColor: '#333333',
-    borderLeftWidth: 1,
-    borderLeftColor: '#333333'
-  },
-  tableCell: {
-    flex: 1,
-    padding: 6,
-    borderRightWidth: 1,
-    borderRightColor: '#333333'
-  },
-  tableFirstRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#333333'
-  },
-  termsList: {
-    marginLeft: 20
-  },
-  termItem: {
-    marginBottom: 6,
+  // 子項目
+  subItem: {
+    marginLeft: 0,
+    marginBottom: 2,
     textAlign: 'justify'
   },
-  signatureArea: {
-    marginTop: 40
+  // 簽名區
+  signatureSection: {
+    marginTop: 20
   },
   signatureRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    marginTop: 15
   },
   signatureBox: {
-    width: '45%'
-  },
-  signatureLabel: {
-    fontWeight: 'bold',
-    marginBottom: 8
+    width: '48%'
   },
   signatureLine: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
-    paddingBottom: 4,
-    marginBottom: 6,
-    minHeight: 20
+    marginBottom: 8
   },
+  // 日期
   dateLine: {
+    textAlign: 'right',
+    marginTop: 30
+  },
+  // 頁碼
+  pageNumber: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
     textAlign: 'center',
-    marginTop: 30,
-    fontSize: 11,
-    letterSpacing: 2
+    fontSize: 9,
+    color: '#666'
   },
   bold: {
     fontWeight: 'bold'
-  },
-  underline: {
-    textDecoration: 'underline'
   }
 })
 
@@ -154,270 +120,253 @@ const formatCurrency = (amount) => {
   return Number(amount).toLocaleString('zh-TW')
 }
 
-// 合約類型對照
-const CONTRACT_TYPE_NAMES = {
-  'virtual_office': '虛擬辦公室',
-  'coworking_fixed': '固定座位',
-  'coworking_flexible': '彈性座位',
-  'meeting_room': '會議室'
+// 格式化日期為民國年
+const formatDateROC = (dateStr) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const rocYear = date.getFullYear() - 1911
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  return `${rocYear}年${String(month).padStart(2, '0')}月${String(day).padStart(2, '0')}日`
 }
 
 // 合約 PDF 元件
 export default function ContractPDF({ data }) {
-  // 支援新架構欄位（合約內儲存客戶資訊）和舊架構欄位（從 customers 表關聯）
   const {
-    contract_number = '',
-    branch_name = '台中館',
+    // 甲方資訊（從分館帶入）
+    branch_company_name = '',
+    branch_tax_id = '',
+    branch_representative = '戴豪廷',
     branch_address = '',
-    branch_phone = '',
-    // 新架構：直接從合約表讀取
+    branch_court = '台中地方法院',
+    // 乙方資訊
     company_name = '',
     representative_name = '',
     representative_address = '',
-    company_tax_id = '',
-    // 舊架構：兼容舊有欄位名
-    customer_name = '',
-    tax_id = '',
     id_number = '',
-    company_address = '',
-    contact_phone = '',
+    company_tax_id = '',
     phone = '',
-    contact_email = '',
     email = '',
-    contract_type = 'coworking_fixed',
+    // 租賃條件
     start_date = '',
     end_date = '',
     periods = 12,
-    // 新架構：原價欄位
-    original_price = 0,
-    list_price = 0,
+    original_price = 3000,
     monthly_rent = 0,
-    monthly_fee = 0,
-    payment_day = 5,
-    deposit_amount = 0,
-    deposit = 0,
-    notes = ''
+    payment_day = 8,
+    deposit_amount = 6000
   } = data
-
-  // 整合新舊欄位（優先使用新架構欄位）
-  const partyBCompany = company_name || ''
-  const partyBRepresentative = representative_name || customer_name || ''
-  const partyBAddress = representative_address || company_address || ''
-  const partyBTaxId = company_tax_id || tax_id || ''
-  const partyBIdNumber = id_number || ''
-  const partyBPhone = phone || contact_phone || ''
-  const partyBEmail = email || contact_email || ''
-  const listPriceValue = original_price || list_price || 0
-  const monthlyFeeValue = monthly_rent || monthly_fee || 0
-  const depositValue = deposit_amount || deposit || 0
-
-  // 格式化日期
-  const formatDate = (dateStr) => {
-    if (!dateStr) return ''
-    const date = new Date(dateStr)
-    return `${date.getFullYear()} 年 ${date.getMonth() + 1} 月 ${date.getDate()} 日`
-  }
 
   // 今日日期（民國）
   const today = new Date()
   const rocYear = today.getFullYear() - 1911
-  const todayMonth = today.getMonth() + 1
-  const todayDay = today.getDate()
+  const todayMonth = String(today.getMonth() + 1).padStart(2, '0')
+  const todayDay = String(today.getDate()).padStart(2, '0')
 
-  const contractTypeName = CONTRACT_TYPE_NAMES[contract_type] || contract_type
-  // 乙方名稱：優先顯示公司名稱，否則顯示負責人姓名
-  const partyBName = partyBCompany || partyBRepresentative
+  // 乙方名稱：優先顯示公司名稱
+  const partyBName = company_name || representative_name || ''
 
   return (
     <Document>
+      {/* 第一頁 */}
       <Page size="A4" style={styles.page}>
+        {/* Logo */}
+        <View style={styles.logoContainer}>
+          <Text style={styles.logoText}>HOUR JUNGLE</Text>
+        </View>
+
         {/* 標題 */}
-        <View style={styles.header}>
-          <Text style={styles.title}>共同工作室租賃契約</Text>
-        </View>
+        <Text style={styles.title}>共同工作室租賃契約</Text>
 
-        {/* 合約編號 */}
-        <View style={styles.contractNumber}>
-          <Text>合約編號：{contract_number}</Text>
-        </View>
-
-        {/* 當事人 */}
+        {/* 立契約人 */}
         <View style={styles.parties}>
-          <View style={styles.partyRow}>
-            <Text style={styles.partyLabel}>出租人：</Text>
-            <Text style={styles.partyValue}>{branch_name}（以下簡稱甲方）</Text>
-          </View>
-          <View style={styles.partyRow}>
-            <Text style={styles.partyLabel}>承租人：</Text>
-            <Text style={styles.partyValue}>{partyBName}（以下簡稱乙方）</Text>
-          </View>
+          <Text style={styles.partyLine}>立契約人</Text>
+          <Text style={styles.partyLine}>出租人：{branch_company_name}(以下簡稱甲方)，</Text>
+          <Text style={styles.partyLine}>承租人：{partyBName}(以下簡稱乙方)</Text>
         </View>
 
         {/* 前言 */}
         <Text style={styles.intro}>
-          甲乙雙方同意依下列條款訂立本租賃契約：
+          因工作室營業登記事件，訂立本契約，雙方同意之條件如左：
         </Text>
 
         {/* 第一條 */}
         <View style={styles.article}>
-          <Text style={styles.articleTitle}>第一條（租賃標的）</Text>
-          <Text style={styles.articleContent}>
-            甲方同意將座落於 {branch_address} 之共同工作空間出租予乙方使用。
+          <Text>
+            <Text style={styles.articleTitle}>第一條：所在地及使用範圍：</Text>
+            <Text> {branch_address}</Text>
           </Text>
         </View>
 
         {/* 第二條 */}
         <View style={styles.article}>
-          <Text style={styles.articleTitle}>第二條（租賃期限）</Text>
-          <Text style={styles.articleContent}>
-            租賃期間自 {formatDate(start_date)} 起至 {formatDate(end_date)} 止，共計 {periods} 個月。
+          <Text>
+            <Text style={styles.articleTitle}>第二條：租賃期限：</Text>
+            <Text>自{formatDateROC(start_date)}起，至{formatDateROC(end_date)}止。</Text>
           </Text>
         </View>
 
         {/* 第三條 */}
         <View style={styles.article}>
-          <Text style={styles.articleTitle}>第三條（租金及付款方式）</Text>
-          <View style={styles.table}>
-            <View style={[styles.tableRow, styles.tableFirstRow]}>
-              <Text style={styles.tableHeader}>服務類型</Text>
-              <Text style={styles.tableCell}>{contractTypeName}</Text>
-            </View>
-            <View style={styles.tableRow}>
-              <Text style={styles.tableHeader}>月租金定價</Text>
-              <Text style={styles.tableCell}>新台幣 {formatCurrency(listPriceValue)} 元整</Text>
-            </View>
-            <View style={styles.tableRow}>
-              <Text style={styles.tableHeader}>優惠後月租</Text>
-              <Text style={styles.tableCell}>新台幣 {formatCurrency(monthlyFeeValue)} 元整</Text>
-            </View>
-            <View style={styles.tableRow}>
-              <Text style={styles.tableHeader}>繳款日</Text>
-              <Text style={styles.tableCell}>每月 {payment_day} 日前</Text>
-            </View>
-            <View style={styles.tableRow}>
-              <Text style={styles.tableHeader}>履約保證金</Text>
-              <Text style={styles.tableCell}>新台幣 {formatCurrency(depositValue)} 元整</Text>
-            </View>
-          </View>
-          <Text style={styles.articleContent}>
-            乙方應於每月 {payment_day} 日前繳納當月租金，逾期未繳納者，甲方得依約收取滯納金。
+          <Text style={styles.articleTitle}>第三條：租金：</Text>
+          <Text style={styles.subItem}>
+            一、定價每月{formatCurrency(original_price)}元，折扣後每月租金新台幣{formatCurrency(monthly_rent)}元，(每{periods}個月為1期，共1期匯款手續費由乙方自行負責)
+          </Text>
+          <Text style={styles.subItem}>
+            二、租金於每期{String(payment_day).padStart(2, '0')}日繳納
+          </Text>
+          <Text style={styles.subItem}>
+            三、履約保證金新台幣 {formatCurrency(deposit_amount)}元，租賃期滿並遷出營業登記後無息返還
           </Text>
         </View>
 
         {/* 第四條 */}
         <View style={styles.article}>
-          <Text style={styles.articleTitle}>第四條（履約保證金）</Text>
-          <Text style={styles.articleContent}>
-            乙方應於簽約時繳納履約保證金新台幣 {formatCurrency(depositValue)} 元整，於租賃期滿並完成點交後無息退還。如乙方有違約情事或積欠租金，甲方得自保證金中扣抵。
+          <Text style={styles.articleTitle}>第四條：使用租物之限制：</Text>
+          <Text style={styles.subItem}>
+            一、乙方不得將使用權限之全部或一部分轉租、出租、頂讓，或以其他變相方法使用工作室。
+          </Text>
+          <Text style={styles.subItem}>
+            二、每一承租戶僅能申請一家公司執照。
+          </Text>
+          <Text style={styles.subItem}>
+            三、乙方於租賃期滿應立即將工作空間遷讓交還，不得向甲方請求遷移費或任何費用。
+          </Text>
+          <Text style={styles.subItem}>
+            四、工作室不得供非法使用，或經營非法之行業，或存收危險物品影響公共安全，若發現之，甲方有全權無條件終止合約，已支付租金不退還。
+          </Text>
+          <Text style={styles.subItem}>
+            五、工作空間若有改裝設施之必要，乙方得甲方同意後得自行裝設，但不得損害原有建築，乙方於交還房屋時並應負責回復原狀。
+          </Text>
+          <Text style={styles.subItem}>
+            六、乙方若欲退租或轉約，需於一個月前通知甲方，自乙方通知日後起算一個月為甲乙雙方合約終止日。
           </Text>
         </View>
 
         {/* 第五條 */}
         <View style={styles.article}>
-          <Text style={styles.articleTitle}>第五條（使用規定）</Text>
-          <View style={styles.termsList}>
-            <Text style={styles.termItem}>一、乙方應遵守甲方訂定之共同工作空間使用規則。</Text>
-            <Text style={styles.termItem}>二、乙方不得將租賃標的全部或一部轉租、出借或以其他方式供他人使用。</Text>
-            <Text style={styles.termItem}>三、乙方應維護公共區域之整潔，並不得有影響其他承租人權益之行為。</Text>
-            <Text style={styles.termItem}>四、乙方不得於租賃標的內從事違法行為或存放危險物品。</Text>
-          </View>
+          <Text>
+            <Text style={styles.articleTitle}>第五條：危險負擔：</Text>
+            <Text>乙方應以善良管理人之注意使用房屋，除因天災地變等不可抗拒之情形外，因乙方之過失致房屋毀損，應負損害賠償之責。</Text>
+          </Text>
         </View>
 
         {/* 第六條 */}
         <View style={styles.article}>
-          <Text style={styles.articleTitle}>第六條（提前終止）</Text>
-          <Text style={styles.articleContent}>
-            任一方如欲提前終止本契約，應於一個月前以書面通知他方。乙方提前終止者，甲方得沒收已繳納之履約保證金。
+          <Text style={styles.articleTitle}>第六條：違約處罰：</Text>
+          <Text style={styles.subItem}>
+            一、乙方違反約定方法使用工作室，或拖欠房租，超過七日甲方得終止租約，押金不得抵算租金。
+          </Text>
+          <Text style={styles.subItem}>
+            二、乙方於終止租約或租賃期滿不交還工作室，自終止租約或租賃期滿之翌日起，乙方應支付案房租五倍計算之違約金，所遺留設備不搬者，視同乙方同意交由甲方處理。
           </Text>
         </View>
 
         {/* 第七條 */}
         <View style={styles.article}>
-          <Text style={styles.articleTitle}>第七條（契約之續約）</Text>
-          <Text style={styles.articleContent}>
-            租賃期滿如欲續約，乙方應於期滿一個月前向甲方提出申請，經甲方同意後另訂新約。
+          <Text style={styles.articleTitle}>第七條：其他特約事項：</Text>
+          <Text style={styles.subItem}>
+            一、乙方除水電費(含公共電費)、管理費、網路費外，營業上必須繳納之稅捐需自行負擔。
+          </Text>
+          <Text style={styles.subItem}>
+            二、乙方以甲方地址申請公司執照者，於合約終止時，需將公司登記遷出，甲方並依稅務等單位要求每月呈報遷出名單公文，否則甲方得將通報乙方營業登記遷出。
+          </Text>
+          <Text style={styles.subItem}>
+            三、甲乙雙方僅有契約履行之責，乙方如與其他人有債務糾紛與法律責任，由乙方自行負責與甲方無關。
+          </Text>
+          <Text style={styles.subItem}>
+            四、乙方如有寄放任何物品於甲方之處，甲方不負任何保管及法律責任，其責任問題均由乙方負全責。但若營業登記事項因甲方因素未能核准則雙方無條件解約退回押金及已繳納租金，並且不得收受任何違約金。
+          </Text>
+          <Text style={styles.subItem}>
+            五、本契約租賃期限未滿，乙方擬解約時，以一個月租金(以原價{formatCurrency(original_price)}元計，且當月份已付租金除外)作為違約金。
+          </Text>
+          <Text style={styles.subItem}>
+            六、租金應於約定日前繳納，不得任何理由拖延或拒絕，若遲繳每日得向承租人收取總額3%滯納金。
+          </Text>
+          <Text style={styles.subItem}>
+            七、甲方為使租賃標地物出租順利，並減輕乙方之租金負擔，特提供乙方之租賃優惠選擇方案（此優惠方案為自由選擇），若乙方違反合約限制或提前辦理退租，乙方無條件同意甲方將當初協議之優惠款項從押金中扣除。以原價{formatCurrency(original_price)}元/月計算
           </Text>
         </View>
 
         {/* 第八條 */}
         <View style={styles.article}>
-          <Text style={styles.articleTitle}>第八條（其他約定事項）</Text>
-          <Text style={styles.articleContent}>
-            {notes || '無。'}
+          <Text style={styles.articleTitle}>第八條：應受強制執行之事項：</Text>
+          <Text style={styles.subItem}>
+            一、租約到期或欠繳房租或終止租約生效時。
+          </Text>
+          <Text style={styles.subItem}>
+            二、乙方如有違反稅法、稅捐稽徵法、社秩法及虛設行號等等不法之事，並影響甲方權益，甲方得立即中止甲乙雙方租約，並應官方要求通報相關單位。甲乙方若無任何違法情事或虛設行號，虛開發票等行為，而無法設籍此地，乙方得終止租約，不以違約論。
           </Text>
         </View>
 
         {/* 第九條 */}
         <View style={styles.article}>
-          <Text style={styles.articleTitle}>第九條（管轄法院）</Text>
+          <Text style={styles.articleTitle}>第九條：保證金:</Text>
           <Text style={styles.articleContent}>
-            本契約如有爭議，雙方同意以台灣台北地方法院為第一審管轄法院。
+            乙方應於本租約履行時同時給付甲方新台幣{formatCurrency(deposit_amount)}元整之保證金，以作為其履行本契約義務之擔保。該保證金於乙方在租約終止或屆滿前遷移5日內向主管機關辦理將其登記地址遷離甲方標的或解散(所有以該地址營業登記均遷移，且不含歇業、停業)後交還房屋並扣除其所積欠之租金等費用及債務後，由甲方無息返還之。就押租金乙方不得主張抵充租金之用。
           </Text>
         </View>
 
-        {/* 契約份數 */}
-        <Text style={{ marginTop: 20 }}>
-          本契約一式貳份，由甲乙雙方各執乙份為憑。
-        </Text>
+        {/* 頁碼 */}
+        <Text style={styles.pageNumber}>第1頁（共2頁）</Text>
+      </Page>
+
+      {/* 第二頁 */}
+      <Page size="A4" style={styles.page}>
+        {/* Logo */}
+        <View style={styles.logoContainer}>
+          <Text style={styles.logoText}>HOUR JUNGLE</Text>
+        </View>
+
+        {/* 第十條 */}
+        <View style={styles.article}>
+          <Text style={styles.articleTitle}>第十條：連帶保證金</Text>
+          <Text style={{ marginLeft: 20 }}>
+            乙方之負責人就本契約之相關責任（含營登租金及違約金）負連帶保證責任。
+          </Text>
+        </View>
+
+        {/* 第十一條 */}
+        <View style={[styles.article, { marginTop: 20 }]}>
+          <Text style={styles.articleTitle}>第十一條：雙方確認事項</Text>
+          <Text style={{ marginTop: 10, marginLeft: 20 }}>
+            甲乙雙方同意，因本契約事項所生之一切爭議，雙方同意以{branch_court}為第一審管轄法院
+          </Text>
+        </View>
 
         {/* 簽名區 */}
-        <View style={styles.signatureArea}>
+        <View style={styles.signatureSection}>
           <View style={styles.signatureRow}>
             {/* 甲方 */}
             <View style={styles.signatureBox}>
-              <Text style={styles.signatureLabel}>甲方（出租人）</Text>
-              <View style={styles.signatureLine}>
-                <Text>公司名稱：{branch_name}</Text>
-              </View>
-              <View style={styles.signatureLine}>
-                <Text>地址：{branch_address}</Text>
-              </View>
-              <View style={styles.signatureLine}>
-                <Text>電話：{branch_phone}</Text>
-              </View>
-              <View style={styles.signatureLine}>
-                <Text>負責人：</Text>
-              </View>
-              <View style={styles.signatureLine}>
-                <Text>簽章：</Text>
-              </View>
+              <Text style={styles.signatureLine}>出租人：{branch_company_name}</Text>
+              <Text style={styles.signatureLine}>統一編號：{branch_tax_id}</Text>
+              <Text style={styles.signatureLine}>負責人：{branch_representative}</Text>
             </View>
 
-            {/* 乙方 */}
-            <View style={styles.signatureBox}>
-              <Text style={styles.signatureLabel}>乙方（承租人）</Text>
-              <View style={styles.signatureLine}>
-                <Text>公司/姓名：{partyBName}</Text>
-              </View>
-              <View style={styles.signatureLine}>
-                <Text>統一編號：{partyBTaxId}</Text>
-              </View>
-              <View style={styles.signatureLine}>
-                <Text>身分證號：{partyBIdNumber}</Text>
-              </View>
-              <View style={styles.signatureLine}>
-                <Text>地址：{partyBAddress}</Text>
-              </View>
-              <View style={styles.signatureLine}>
-                <Text>電話：{partyBPhone}</Text>
-              </View>
-              <View style={styles.signatureLine}>
-                <Text>Email：{partyBEmail}</Text>
-              </View>
-              <View style={styles.signatureLine}>
-                <Text>負責人：{partyBRepresentative}</Text>
-              </View>
-              <View style={styles.signatureLine}>
-                <Text>簽章：</Text>
-              </View>
-            </View>
+            {/* 印章區域（空白） */}
+            <View style={{ width: 80, height: 80 }} />
+          </View>
+
+          {/* 乙方 */}
+          <View style={{ marginTop: 30 }}>
+            <Text style={styles.signatureLine}>承租人公司名稱：{company_name}</Text>
+            <Text style={styles.signatureLine}>負責人：{representative_name}</Text>
+            <Text style={styles.signatureLine}>地址：{representative_address}</Text>
+            <Text style={styles.signatureLine}>身分證統一編號：{id_number}</Text>
+            <Text style={styles.signatureLine}>公司統一編號：{company_tax_id}</Text>
+            <Text style={styles.signatureLine}>聯絡電話：{phone}</Text>
+            <Text style={styles.signatureLine}>E-MAIL：{email}</Text>
           </View>
         </View>
 
         {/* 日期 */}
         <Text style={styles.dateLine}>
-          中　華　民　國　{rocYear}　年　{todayMonth}　月　{todayDay}　日
+          {rocYear}年{todayMonth}月{todayDay}日
         </Text>
+
+        {/* 頁碼 */}
+        <Text style={styles.pageNumber}>第2頁（共2頁）</Text>
       </Page>
     </Document>
   )
