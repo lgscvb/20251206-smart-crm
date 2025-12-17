@@ -9,16 +9,21 @@ import {
   Image
 } from '@react-pdf/renderer'
 
-// 註冊中文字體 (使用子集化字體)
+// 註冊中文字體 (使用子集化字體，需使用完整 URL)
+// 生產環境使用線上 URL，開發環境使用本地
+const FONT_BASE = typeof window !== 'undefined'
+  ? window.location.origin
+  : 'https://hj.yourspce.org'
+
 Font.register({
   family: 'NotoSansTC',
   fonts: [
     {
-      src: '/fonts/NotoSansTC-Regular-Subset.ttf',
+      src: `${FONT_BASE}/fonts/NotoSansTC-Regular-Subset.ttf`,
       fontWeight: 'normal'
     },
     {
-      src: '/fonts/NotoSansTC-Bold-Subset.ttf',
+      src: `${FONT_BASE}/fonts/NotoSansTC-Bold-Subset.ttf`,
       fontWeight: 'bold'
     }
   ]
