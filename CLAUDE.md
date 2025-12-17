@@ -28,10 +28,11 @@ src/
 │   ├── Modal.jsx        # 模態框
 │   ├── Badge.jsx        # 狀態徽章
 │   └── pdf/             # PDF 元件
-│       ├── QuotePDF.jsx
-│       └── ContractPDF.jsx
+│       ├── QuotePDF.jsx      # 報價單 PDF
+│       ├── ContractPDF.jsx   # 合約 PDF
+│       └── FloorPlanPDF.jsx  # 平面圖 + 租戶名冊 PDF
 │
-├── pages/               # 頁面元件 (19個)
+├── pages/               # 頁面元件 (20個)
 │   ├── Dashboard.jsx    # 儀表板
 │   ├── Customers.jsx    # 客戶列表
 │   ├── CustomerDetail.jsx
@@ -45,6 +46,7 @@ src/
 │   ├── Prospects.jsx    # 潛客管理
 │   ├── LegalLetters.jsx # 存證信函
 │   ├── Bookings.jsx     # 會議室預約
+│   ├── FloorPlan.jsx    # 平面圖管理
 │   ├── AIAssistant.jsx  # AI 助手
 │   └── Settings.jsx     # 系統設定
 │
@@ -191,6 +193,8 @@ await callTool('line_send_payment_reminder', {
 
 ## 部署
 
+### 手動部署
+
 ```bash
 # 建構
 npm run build
@@ -198,6 +202,158 @@ npm run build
 # 打包
 tar -czvf dist.tar.gz dist/
 
-# 上傳到伺服器後解壓
-# Nginx 配置請參考 nginx.conf
+# 上傳到 GCP VM
+gcloud compute scp dist.tar.gz instance-20251201-132636:/tmp/ \
+  --zone=us-west1-b --project=gen-lang-client-0281456461
+
+# 部署
+gcloud compute ssh instance-20251201-132636 \
+  --zone=us-west1-b --project=gen-lang-client-0281456461 \
+  --command="cd /var/www/html && sudo rm -rf * && sudo tar -xzf /tmp/dist.tar.gz --strip-components=1"
 ```
+
+### GitHub Actions 自動部署
+
+推送到 `main` 分支會自動觸發 CI/CD：
+- 位置：`.github/workflows/deploy.yml`
+- 流程：npm ci → npm run build → SSH 到 VM 部署
+
+---
+
+## PDF 生成功能
+
+### 架構說明
+
+本專案使用**前端 PDF 生成**（@react-pdf/renderer），而非後端生成，原因：
+- 後端生成（Cloud Run + WeasyPrint）速度慢（15-20秒超時）
+- 前端生成速度快，無需網路請求
+
+### PDF 元件
+
+| 元件 | 用途 | 字體 |
+|------|------|------|
+| `QuotePDF.jsx` | 報價單 | NotoSansTC（子集，214KB） |
+| `ContractPDF.jsx` | 合約 | NotoSansTC（子集） |
+| `FloorPlanPDF.jsx` | 平面圖 + 租戶名冊 | NotoSansTCFull（完整，14MB） |
+
+### 字體配置
+
+```
+public/fonts/
+├── NotoSansTC-Regular.ttf      # 完整字體 (6.8MB)
+├── NotoSansTC-Bold.ttf         # 完整字體 (6.8MB)
+├── NotoSansTC-Regular-Subset.ttf  # 子集字體 (110KB)
+├── NotoSansTC-Bold-Subset.ttf     # 子集字體 (110KB)
+└── charset.txt                    # 子集包含的字符
+```
+
+**重要**：
+- `FloorPlanPDF` 使用完整字體（`NotoSansTCFull`），因為需要顯示所有租戶公司名稱
+- `QuotePDF` 使用子集字體（`NotoSansTC`），內容較固定
+- 兩者使用**不同字體家族名稱**避免衝突
+
+### 更新子集字體
+
+當需要新增字符到子集字體時：
+
+```bash
+# 1. 編輯 charset.txt 加入新字符
+# 2. 重新生成子集
+cd public/fonts
+pyftsubset NotoSansTC-Regular.ttf --text-file=charset.txt --output-file=NotoSansTC-Regular-Subset.ttf
+pyftsubset NotoSansTC-Bold.ttf --text-file=charset.txt --output-file=NotoSansTC-Bold-Subset.ttf
+```
+
+### html2canvas 截圖
+
+`FloorPlan.jsx` 使用 html2canvas 截取平面圖 DOM：
+
+```javascript
+import html2canvas from 'html2canvas'
+
+// 圖片需要 crossOrigin 屬性
+<img src={url} crossOrigin="anonymous" />
+
+// 截圖
+const canvas = await html2canvas(ref.current, {
+  scale: 1,
+  useCORS: true,
+  allowTaint: true
+})
+```
+
+---
+
+## GCS CORS 設定
+
+平面圖儲存在 GCS，需要 CORS 設定讓 html2canvas 可以載入：
+
+```bash
+# 更新 CORS 設定
+echo '[{"origin": ["*"], "method": ["GET", "HEAD"], "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"], "maxAgeSeconds": 3600}]' > /tmp/cors.json
+gcloud storage buckets update gs://hourjungle-contracts --cors-file=/tmp/cors.json
+```
+
+---
+
+## 前端 Nginx 設定
+
+```nginx
+# /etc/nginx/sites-available/smartoffice-crm
+server {
+    listen 80;
+    server_name hj.yourspce.org;
+    root /var/www/html;
+    index index.html;
+
+    # SPA 路由
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API 代理（使用 HTTPS）
+    location /api/tools/ {
+        proxy_pass https://auto.yourspce.org/tools/;
+        proxy_ssl_server_name on;
+        proxy_set_header Host auto.yourspce.org;
+    }
+
+    location /api/db/ {
+        proxy_pass https://auto.yourspce.org/api/db/;
+        proxy_ssl_server_name on;
+        proxy_set_header Host auto.yourspce.org;
+    }
+
+    location /api/ai/ {
+        proxy_pass https://auto.yourspce.org/ai/;
+        proxy_ssl_server_name on;
+        proxy_set_header Host auto.yourspce.org;
+    }
+
+    # 字體快取
+    location /fonts/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+```
+
+---
+
+## 踩坑紀錄
+
+### PDF 中文亂碼
+- **問題**：@react-pdf/renderer 中文字顯示為方塊
+- **原因**：子集字體缺少字符，或多個 PDF 元件註冊同名字體衝突
+- **解決**：使用完整字體 + 不同字體家族名稱
+
+### html2canvas CORS 錯誤
+- **問題**：`Access to image blocked by CORS policy`
+- **解決**：
+  1. GCS bucket 設定 CORS
+  2. img 標籤加上 `crossOrigin="anonymous"`
+
+### Cloudflare HTTPS
+- **問題**：API 請求返回 405
+- **原因**：Cloudflare 強制 HTTPS，nginx proxy_pass 用 HTTP 會失敗
+- **解決**：proxy_pass 使用 `https://` + `proxy_ssl_server_name on`

@@ -9,16 +9,16 @@ import {
   Image
 } from '@react-pdf/renderer'
 
-// 註冊中文字體（使用本地子集化字體）
+// 註冊中文字體（使用完整字體以支援所有中文字，用不同名稱避免衝突）
 Font.register({
-  family: 'NotoSansTC',
+  family: 'NotoSansTCFull',
   fonts: [
     {
-      src: '/fonts/NotoSansTC-Regular-Subset.ttf',
+      src: '/fonts/NotoSansTC-Regular.ttf',
       fontWeight: 'normal'
     },
     {
-      src: '/fonts/NotoSansTC-Bold-Subset.ttf',
+      src: '/fonts/NotoSansTC-Bold.ttf',
       fontWeight: 'bold'
     }
   ]
@@ -28,7 +28,7 @@ Font.register({
 const styles = StyleSheet.create({
   // 第一頁：平面圖
   pagePlan: {
-    fontFamily: 'NotoSansTC',
+    fontFamily: 'NotoSansTCFull',
     fontSize: 10,
     padding: 20,
     backgroundColor: '#ffffff'
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   },
   // 第二頁：表格
   pageTable: {
-    fontFamily: 'NotoSansTC',
+    fontFamily: 'NotoSansTCFull',
     fontSize: 9,
     padding: 30,
     backgroundColor: '#ffffff'
