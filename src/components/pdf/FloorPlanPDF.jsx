@@ -24,135 +24,138 @@ Font.register({
   ]
 })
 
-// 樣式定義
+// 樣式定義 - 橫向 A4，左邊平面圖，右邊表格
 const styles = StyleSheet.create({
   page: {
     fontFamily: 'NotoSansTC',
-    fontSize: 9,
-    padding: 30,
+    fontSize: 8,
+    padding: 20,
     backgroundColor: '#ffffff'
   },
   header: {
     textAlign: 'center',
-    marginBottom: 15,
-    paddingBottom: 10,
+    marginBottom: 10,
+    paddingBottom: 8,
     borderBottomWidth: 2,
     borderBottomColor: '#2c5530'
   },
   title: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#2c5530'
   },
   subtitle: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#666666',
-    marginTop: 4
+    marginTop: 3
   },
   date: {
-    fontSize: 9,
+    fontSize: 8,
     color: '#999999',
     marginTop: 2
   },
-  // 主要佈局
+  // 主要佈局：左右分欄
   mainContent: {
     flexDirection: 'row',
+    flex: 1
+  },
+  // 左側：平面圖
+  leftSection: {
+    width: '60%',
+    paddingRight: 10
+  },
+  // 右側：統計 + 表格
+  rightSection: {
+    width: '40%'
+  },
+  // 平面圖圖片
+  floorPlanImage: {
+    width: '100%',
+    objectFit: 'contain',
+    border: '1px solid #ddd'
+  },
+  // 圖例
+  legend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 5,
     gap: 15
   },
-  leftSection: {
-    width: '35%'
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center'
   },
-  rightSection: {
-    width: '65%'
+  legendBox: {
+    width: 10,
+    height: 10,
+    borderWidth: 1,
+    borderColor: '#333333',
+    borderRadius: 2,
+    marginRight: 4
+  },
+  legendOccupied: {
+    backgroundColor: '#ffffff'
+  },
+  legendVacant: {
+    backgroundColor: '#f0f0f0'
+  },
+  legendText: {
+    fontSize: 7
   },
   // 統計區
   statsBox: {
     backgroundColor: '#f8f9fa',
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    borderRadius: 5,
-    padding: 10,
-    marginBottom: 10
+    borderRadius: 4,
+    padding: 8,
+    marginBottom: 8
   },
   statsTitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
     color: '#2c5530',
-    marginBottom: 8,
-    paddingBottom: 4,
+    marginBottom: 6,
+    paddingBottom: 3,
     borderBottomWidth: 1,
     borderBottomColor: '#2c5530'
   },
   statsRow: {
     flexDirection: 'row',
-    marginBottom: 6
+    marginBottom: 4
   },
   statItem: {
     width: '50%',
     backgroundColor: '#ffffff',
-    padding: 8,
+    padding: 6,
     borderWidth: 1,
     borderColor: '#eeeeee',
     textAlign: 'center'
   },
   statValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#2c5530'
   },
   statLabel: {
-    fontSize: 8,
+    fontSize: 7,
     color: '#666666',
     marginTop: 2
-  },
-  // 圖例
-  legend: {
-    marginTop: 10,
-    padding: 8,
-    backgroundColor: '#fafafa',
-    borderRadius: 4
-  },
-  legendTitle: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    marginBottom: 6
-  },
-  legendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4
-  },
-  legendBox: {
-    width: 12,
-    height: 12,
-    borderWidth: 1,
-    borderColor: '#333333',
-    borderRadius: 2,
-    marginRight: 6
-  },
-  legendOccupied: {
-    backgroundColor: '#ffffff'
-  },
-  legendVacant: {
-    backgroundColor: '#f0f0f0',
-    borderStyle: 'dashed'
-  },
-  legendText: {
-    fontSize: 8
   },
   // 租戶表格
   tableWrapper: {
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    borderRadius: 5,
-    overflow: 'hidden'
+    borderRadius: 4,
+    overflow: 'hidden',
+    flex: 1
   },
   tableHeader: {
     backgroundColor: '#2c5530',
-    padding: 8
+    padding: 6
   },
   tableHeaderText: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: 'bold',
     color: '#ffffff'
   },
@@ -175,37 +178,42 @@ const styles = StyleSheet.create({
   },
   // 雙欄表格欄位
   colPos: {
-    width: '8%',
-    padding: 4,
+    width: '12%',
+    padding: 3,
     textAlign: 'center',
     fontWeight: 'bold'
   },
   colName: {
-    width: '17%',
-    padding: 4
+    width: '22%',
+    padding: 3
   },
   colCompany: {
-    width: '25%',
-    padding: 4
+    width: '28%',
+    padding: 3
+  },
+  // 分隔線
+  colDivider: {
+    width: '1%',
+    backgroundColor: '#eeeeee'
   },
   thText: {
     fontWeight: 'bold',
-    fontSize: 8
+    fontSize: 7
   },
   tdText: {
-    fontSize: 8
+    fontSize: 7
   },
   tdBold: {
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: 'bold'
   },
   // 頁尾
   footer: {
-    marginTop: 10,
+    marginTop: 8,
     textAlign: 'center',
-    fontSize: 8,
+    fontSize: 7,
     color: '#999999',
-    paddingTop: 8,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: '#eeeeee'
   }
@@ -217,12 +225,19 @@ const formatDate = () => {
   return `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`
 }
 
+// 截斷文字
+function truncate(text, maxLen) {
+  if (!text) return ''
+  return text.length > maxLen ? text.slice(0, maxLen - 1) + '…' : text
+}
+
 // 平面圖 PDF 元件
 export default function FloorPlanPDF({ data }) {
   const {
     floor_plan = {},
     positions = [],
-    statistics = {}
+    statistics = {},
+    floorPlanImage = null
   } = data
 
   // 篩選已租用位置
@@ -248,8 +263,32 @@ export default function FloorPlanPDF({ data }) {
         </View>
 
         <View style={styles.mainContent}>
-          {/* 左側：統計 + 圖例 */}
+          {/* 左側：平面圖 */}
           <View style={styles.leftSection}>
+            {floorPlanImage ? (
+              <Image src={floorPlanImage} style={styles.floorPlanImage} />
+            ) : (
+              <View style={{ backgroundColor: '#f5f5f5', height: 300, justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ color: '#999' }}>平面圖載入中...</Text>
+              </View>
+            )}
+
+            {/* 圖例 */}
+            <View style={styles.legend}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendBox, styles.legendOccupied]} />
+                <Text style={styles.legendText}>已租用</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendBox, styles.legendVacant]} />
+                <Text style={styles.legendText}>空位</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* 右側：統計 + 表格 */}
+          <View style={styles.rightSection}>
+            {/* 統計區 */}
             <View style={styles.statsBox}>
               <Text style={styles.statsTitle}>空間統計</Text>
               <View style={styles.statsRow}>
@@ -274,21 +313,7 @@ export default function FloorPlanPDF({ data }) {
               </View>
             </View>
 
-            <View style={styles.legend}>
-              <Text style={styles.legendTitle}>圖例說明</Text>
-              <View style={styles.legendRow}>
-                <View style={[styles.legendBox, styles.legendOccupied]} />
-                <Text style={styles.legendText}>已租用（有租戶）</Text>
-              </View>
-              <View style={styles.legendRow}>
-                <View style={[styles.legendBox, styles.legendVacant]} />
-                <Text style={styles.legendText}>空位（待租）</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* 右側：租戶表格 */}
-          <View style={styles.rightSection}>
+            {/* 租戶表格 */}
             <View style={styles.tableWrapper}>
               <View style={styles.tableHeader}>
                 <Text style={styles.tableHeaderText}>租戶名冊（國稅局備查）</Text>
@@ -299,6 +324,7 @@ export default function FloorPlanPDF({ data }) {
                   <Text style={[styles.colPos, styles.thText]}>位置</Text>
                   <Text style={[styles.colName, styles.thText]}>負責人</Text>
                   <Text style={[styles.colCompany, styles.thText]}>公司名稱</Text>
+                  <View style={styles.colDivider} />
                   <Text style={[styles.colPos, styles.thText]}>位置</Text>
                   <Text style={[styles.colName, styles.thText]}>負責人</Text>
                   <Text style={[styles.colCompany, styles.thText]}>公司名稱</Text>
@@ -315,28 +341,29 @@ export default function FloorPlanPDF({ data }) {
                       {row.left?.position_number || ''}
                     </Text>
                     <Text style={[styles.colName, styles.tdText]}>
-                      {row.left?.customer_name || ''}
+                      {truncate(row.left?.customer_name, 6)}
                     </Text>
                     <Text style={[styles.colCompany, styles.tdText]}>
-                      {truncate(row.left?.company_name, 14)}
+                      {truncate(row.left?.company_name, 10)}
                     </Text>
+                    <View style={styles.colDivider} />
                     {/* 右欄 */}
                     <Text style={[styles.colPos, styles.tdBold]}>
                       {row.right?.position_number || ''}
                     </Text>
                     <Text style={[styles.colName, styles.tdText]}>
-                      {row.right?.customer_name || ''}
+                      {truncate(row.right?.customer_name, 6)}
                     </Text>
                     <Text style={[styles.colCompany, styles.tdText]}>
-                      {truncate(row.right?.company_name, 14)}
+                      {truncate(row.right?.company_name, 10)}
                     </Text>
                   </View>
                 ))}
 
                 {/* 空資料提示 */}
                 {rows.length === 0 && (
-                  <View style={[styles.tableRow, { padding: 20, justifyContent: 'center' }]}>
-                    <Text style={{ color: '#999999', textAlign: 'center' }}>
+                  <View style={[styles.tableRow, { padding: 15, justifyContent: 'center' }]}>
+                    <Text style={{ color: '#999999', textAlign: 'center', width: '100%' }}>
                       尚無租戶資料
                     </Text>
                   </View>
@@ -353,10 +380,4 @@ export default function FloorPlanPDF({ data }) {
       </Page>
     </Document>
   )
-}
-
-// 截斷文字
-function truncate(text, maxLen) {
-  if (!text) return ''
-  return text.length > maxLen ? text.slice(0, maxLen - 1) + '…' : text
 }

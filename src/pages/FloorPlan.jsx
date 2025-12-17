@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { pdf } from '@react-pdf/renderer'
+import html2canvas from 'html2canvas'
 import { callTool } from '../services/api'
 import api from '../services/api'
 import useStore from '../store/useStore'
@@ -92,18 +93,36 @@ export default function FloorPlan() {
       return
     }
 
+    if (!floorPlanRef.current) {
+      addNotification({ type: 'error', message: '平面圖尚未載入' })
+      return
+    }
+
     setIsGeneratingPdf(true)
     try {
+      // 1. 使用 html2canvas 截圖平面圖
+      addNotification({ type: 'info', message: '正在截圖平面圖...' })
+      const canvas = await html2canvas(floorPlanRef.current, {
+        scale: 1,  // 使用原始大小
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      })
+      const floorPlanImage = canvas.toDataURL('image/png')
+
+      // 2. 準備 PDF 資料
       const pdfData = {
         floor_plan: floorPlanData.result.floor_plan,
         positions: floorPlanData.result.positions,
-        statistics: floorPlanData.result.statistics
+        statistics: floorPlanData.result.statistics,
+        floorPlanImage  // 傳入截圖
       }
 
-      // 使用 @react-pdf/renderer 前端生成 PDF
+      // 3. 使用 @react-pdf/renderer 前端生成 PDF
+      addNotification({ type: 'info', message: '正在生成 PDF...' })
       const blob = await pdf(<FloorPlanPDF data={pdfData} />).toBlob()
 
-      // 建立下載連結
+      // 4. 建立下載連結
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
