@@ -30,7 +30,7 @@ import Notifications from './Notifications'
 
 const navigation = [
   { name: '儀表板', href: '/dashboard', icon: LayoutDashboard },
-  { name: '客戶管理', href: '/customers', icon: Users },
+  { name: '報價單', href: '/quotes', icon: FileSignature },
   { name: '合約管理', href: '/contracts', icon: FileText },
   { name: '繳費管理', href: '/payments', icon: CreditCard },
   { name: '發票管理', href: '/invoices', icon: Receipt },
@@ -38,11 +38,11 @@ const navigation = [
   { name: '會議室預約', href: '/bookings', icon: CalendarDays },
   { name: '平面圖', href: '/floor-plan', icon: Map },
   { name: '佣金管理', href: '/commissions', icon: DollarSign },
-  { name: '報價單', href: '/quotes', icon: FileSignature },
   { name: '報表中心', href: '/reports', icon: BarChart3 },
   { name: 'AI 助手', href: '/ai-assistant', icon: Bot },
   { name: '資料驗證', href: '/data-validation', icon: ShieldCheck },
   { name: '潛客管理', href: '/prospects', icon: UserPlus },
+  { name: '客戶管理', href: '/customers', icon: Users },
 ]
 
 export default function Layout() {

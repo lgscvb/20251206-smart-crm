@@ -23,15 +23,24 @@ const OPTIONAL_COLUMNS = {
   actions: { label: '操作', default: true }
 }
 
-// 初始合約表單
+// 初始合約表單（新架構：直接填寫客戶資訊）
 const INITIAL_CONTRACT_FORM = {
-  customer_id: '',
+  // 承租人資訊
+  company_name: '',
+  representative_name: '',
+  representative_address: '',
+  id_number: '',
+  company_tax_id: '',
+  phone: '',
+  email: '',
+  // 合約資訊
   branch_id: 1,
   contract_type: 'virtual_office',
   start_date: new Date().toISOString().split('T')[0],
   end_date: '',
+  original_price: '',
   monthly_rent: '',
-  deposit: '',
+  deposit_amount: '',
   payment_cycle: 'monthly',
   payment_day: 5,
   position_number: ''
@@ -71,8 +80,8 @@ export default function Contracts() {
   const queryClient = useQueryClient()
   const addNotification = useStore((state) => state.addNotification)
 
-  // 取得客戶列表（供下拉選單）
-  const { data: customers } = useCustomers({ limit: 500 })
+  // 客戶列表（保留供其他功能使用）
+  // const { data: customers } = useCustomers({ limit: 500 })
 
   // 續約 mutation
   const renewContract = useMutation({
@@ -230,32 +239,45 @@ export default function Contracts() {
   // 新增合約
   const handleCreateContract = async (e) => {
     e.preventDefault()
-    if (!contractForm.customer_id) {
-      alert('請選擇客戶')
+    // 驗證必填欄位
+    if (!contractForm.representative_name) {
+      addNotification({ type: 'error', message: '請填寫負責人姓名' })
+      return
+    }
+    if (!contractForm.phone) {
+      addNotification({ type: 'error', message: '請填寫聯絡電話' })
       return
     }
     if (!contractForm.start_date || !contractForm.end_date) {
-      alert('請填寫合約期間')
+      addNotification({ type: 'error', message: '請填寫合約期間' })
       return
     }
     if (!contractForm.monthly_rent) {
-      alert('請填寫月租金額')
+      addNotification({ type: 'error', message: '請填寫月租金額' })
       return
     }
 
     setIsSubmitting(true)
     try {
-      const result = await crm.createContract({
-        customer_id: parseInt(contractForm.customer_id),
+      const result = await callTool('crm_create_contract', {
+        // 承租人資訊（觸發器會自動建立/關聯客戶）
+        company_name: contractForm.company_name || null,
+        representative_name: contractForm.representative_name,
+        representative_address: contractForm.representative_address || null,
+        id_number: contractForm.id_number || null,
+        company_tax_id: contractForm.company_tax_id || null,
+        phone: contractForm.phone,
+        email: contractForm.email || null,
+        // 合約資訊
         branch_id: parseInt(contractForm.branch_id),
         contract_type: contractForm.contract_type,
         start_date: contractForm.start_date,
         end_date: contractForm.end_date,
+        original_price: contractForm.original_price ? parseFloat(contractForm.original_price) : null,
         monthly_rent: parseFloat(contractForm.monthly_rent),
-        deposit: parseFloat(contractForm.deposit) || 0,
+        deposit_amount: parseFloat(contractForm.deposit_amount) || 0,
         payment_cycle: contractForm.payment_cycle,
-        payment_day: parseInt(contractForm.payment_day),
-        position_number: contractForm.position_number ? parseInt(contractForm.position_number) : null
+        payment_day: parseInt(contractForm.payment_day)
       })
 
       if (result?.success || result?.result?.success) {
@@ -667,145 +689,215 @@ export default function Contracts() {
         title="新增合約"
         size="lg"
       >
-        <form onSubmit={handleCreateContract} className="space-y-4">
-          {/* 客戶選擇 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              客戶 <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={contractForm.customer_id}
-              onChange={(e) => setContractForm(prev => ({ ...prev, customer_id: e.target.value }))}
-              className="input w-full"
-              required
-            >
-              <option value="">選擇客戶</option>
-              {(customers || []).map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.name} {c.company_name ? `(${c.company_name})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 合約類型 */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">合約類型</label>
-              <select
-                value={contractForm.contract_type}
-                onChange={(e) => setContractForm(prev => ({ ...prev, contract_type: e.target.value }))}
-                className="input w-full"
-              >
-                <option value="virtual_office">虛擬辦公室</option>
-                <option value="shared_space">共享空間</option>
-                <option value="meeting_room">會議室</option>
-                <option value="mailbox">郵件代收</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">分館</label>
-              <select
-                value={contractForm.branch_id}
-                onChange={(e) => setContractForm(prev => ({ ...prev, branch_id: e.target.value }))}
-                className="input w-full"
-              >
-                <option value="1">大忠館</option>
-                <option value="2">環瑞館</option>
-              </select>
-            </div>
-          </div>
-
-          {/* 合約期間 */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                起始日期 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={contractForm.start_date}
-                onChange={(e) => setContractForm(prev => ({ ...prev, start_date: e.target.value }))}
-                className="input w-full"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                結束日期 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={contractForm.end_date}
-                onChange={(e) => setContractForm(prev => ({ ...prev, end_date: e.target.value }))}
-                className="input w-full"
-                required
-              />
-            </div>
-          </div>
-
-          {/* 金額 */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                月租金額 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                value={contractForm.monthly_rent}
-                onChange={(e) => setContractForm(prev => ({ ...prev, monthly_rent: e.target.value }))}
-                className="input w-full"
-                placeholder="例如：1690"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">押金</label>
-              <input
-                type="number"
-                value={contractForm.deposit}
-                onChange={(e) => setContractForm(prev => ({ ...prev, deposit: e.target.value }))}
-                className="input w-full"
-                placeholder="例如：3000"
-              />
+        <form onSubmit={handleCreateContract} className="space-y-6">
+          {/* 承租人資訊（乙方） */}
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-medium text-blue-900 mb-4">承租人資訊（乙方）</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">公司名稱</label>
+                <input
+                  type="text"
+                  value={contractForm.company_name}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, company_name: e.target.value }))}
+                  className="input w-full"
+                  placeholder="公司名稱（新設立可空白）"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  負責人姓名 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={contractForm.representative_name}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, representative_name: e.target.value }))}
+                  className="input w-full"
+                  placeholder="負責人姓名"
+                  required
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">負責人地址</label>
+                <input
+                  type="text"
+                  value={contractForm.representative_address}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, representative_address: e.target.value }))}
+                  className="input w-full"
+                  placeholder="戶籍地址"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">身分證號碼</label>
+                <input
+                  type="text"
+                  value={contractForm.id_number}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, id_number: e.target.value }))}
+                  className="input w-full"
+                  placeholder="身分證/居留證號碼"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">公司統編</label>
+                <input
+                  type="text"
+                  value={contractForm.company_tax_id}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, company_tax_id: e.target.value }))}
+                  className="input w-full"
+                  placeholder="8碼統編（新設立可空白）"
+                  maxLength={8}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  聯絡電話 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={contractForm.phone}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, phone: e.target.value }))}
+                  className="input w-full"
+                  placeholder="聯絡電話"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                <input
+                  type="email"
+                  value={contractForm.email}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, email: e.target.value }))}
+                  className="input w-full"
+                  placeholder="電子郵件"
+                />
+              </div>
             </div>
           </div>
 
-          {/* 繳費週期和位置 */}
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">繳費週期</label>
-              <select
-                value={contractForm.payment_cycle}
-                onChange={(e) => setContractForm(prev => ({ ...prev, payment_cycle: e.target.value }))}
-                className="input w-full"
-              >
-                <option value="monthly">月繳</option>
-                <option value="quarterly">季繳</option>
-                <option value="semi_annual">半年繳</option>
-                <option value="annual">年繳</option>
-              </select>
+          {/* 合約條件 */}
+          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+            <h3 className="font-medium text-green-900 mb-4">租賃條件</h3>
+
+            {/* 合約類型 */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">合約類型</label>
+                <select
+                  value={contractForm.contract_type}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, contract_type: e.target.value }))}
+                  className="input w-full"
+                >
+                  <option value="virtual_office">虛擬辦公室</option>
+                  <option value="coworking_fixed">固定座位</option>
+                  <option value="coworking_flexible">彈性座位</option>
+                  <option value="meeting_room">會議室</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">分館</label>
+                <select
+                  value={contractForm.branch_id}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, branch_id: e.target.value }))}
+                  className="input w-full"
+                >
+                  <option value="1">大忠館</option>
+                  <option value="2">環瑞館</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">繳費日</label>
-              <input
-                type="number"
-                value={contractForm.payment_day}
-                onChange={(e) => setContractForm(prev => ({ ...prev, payment_day: e.target.value }))}
-                className="input w-full"
-                min="1"
-                max="28"
-              />
+
+            {/* 合約期間 */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  起始日期 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={contractForm.start_date}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, start_date: e.target.value }))}
+                  className="input w-full"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  結束日期 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={contractForm.end_date}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, end_date: e.target.value }))}
+                  className="input w-full"
+                  required
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">位置編號</label>
-              <input
-                type="number"
-                value={contractForm.position_number}
-                onChange={(e) => setContractForm(prev => ({ ...prev, position_number: e.target.value }))}
-                className="input w-full"
-                placeholder="選填"
-              />
+
+            {/* 金額 */}
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">定價（原價）</label>
+                <input
+                  type="number"
+                  value={contractForm.original_price}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, original_price: e.target.value }))}
+                  className="input w-full"
+                  placeholder="用於違約金計算"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  月租金額 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={contractForm.monthly_rent}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, monthly_rent: e.target.value }))}
+                  className="input w-full"
+                  placeholder="實際月租"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">押金</label>
+                <input
+                  type="number"
+                  value={contractForm.deposit_amount}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, deposit_amount: e.target.value }))}
+                  className="input w-full"
+                  placeholder="押金金額"
+                />
+              </div>
+            </div>
+
+            {/* 繳費週期 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">繳費週期</label>
+                <select
+                  value={contractForm.payment_cycle}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, payment_cycle: e.target.value }))}
+                  className="input w-full"
+                >
+                  <option value="monthly">月繳</option>
+                  <option value="quarterly">季繳</option>
+                  <option value="semi_annual">半年繳</option>
+                  <option value="annual">年繳</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">繳費日</label>
+                <input
+                  type="number"
+                  value={contractForm.payment_day}
+                  onChange={(e) => setContractForm(prev => ({ ...prev, payment_day: e.target.value }))}
+                  className="input w-full"
+                  min="1"
+                  max="28"
+                  placeholder="每期幾號"
+                />
+              </div>
             </div>
           </div>
 
