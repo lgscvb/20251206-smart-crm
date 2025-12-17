@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useContracts, useCustomers } from '../hooks/useApi'
-import { crm } from '../services/api'
+import { crm, callTool } from '../services/api'
+import useStore from '../store/useStore'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import Badge, { StatusBadge } from '../components/Badge'
-import { FileText, Calendar, DollarSign, FileX, Settings2, ChevronDown, FileDown, Loader2, ExternalLink, X, Plus } from 'lucide-react'
+import { FileText, Calendar, DollarSign, FileX, Settings2, ChevronDown, FileDown, Loader2, ExternalLink, X, Plus, RefreshCw, Edit3 } from 'lucide-react'
 
 // 可選欄位定義（# 和合約編號固定顯示）
 const OPTIONAL_COLUMNS = {
@@ -50,8 +52,147 @@ export default function Contracts() {
   const [contractForm, setContractForm] = useState(INITIAL_CONTRACT_FORM)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // 續約相關
+  const [showRenewModal, setShowRenewModal] = useState(false)
+  const [selectedContract, setSelectedContract] = useState(null)
+  const [renewForm, setRenewForm] = useState({
+    new_start_date: '',
+    new_end_date: '',
+    new_monthly_rent: '',
+    notes: ''
+  })
+
+  // 補統編相關
+  const [showTaxIdModal, setShowTaxIdModal] = useState(false)
+  const [taxIdForm, setTaxIdForm] = useState({
+    company_tax_id: ''
+  })
+
+  const queryClient = useQueryClient()
+  const addNotification = useStore((state) => state.addNotification)
+
   // 取得客戶列表（供下拉選單）
   const { data: customers } = useCustomers({ limit: 500 })
+
+  // 續約 mutation
+  const renewContract = useMutation({
+    mutationFn: (data) => callTool('contract_renew', data),
+    onSuccess: (response) => {
+      const data = response?.result || response
+      if (data.success) {
+        queryClient.invalidateQueries({ queryKey: ['contracts'] })
+        addNotification({
+          type: 'success',
+          message: `續約成功！新合約編號：${data.new_contract?.contract_number || ''}`
+        })
+        setShowRenewModal(false)
+        resetRenewForm()
+      } else {
+        addNotification({ type: 'error', message: data.message || '續約失敗' })
+      }
+    },
+    onError: (error) => {
+      addNotification({ type: 'error', message: `續約失敗: ${error.message}` })
+    }
+  })
+
+  // 補統編 mutation
+  const updateTaxId = useMutation({
+    mutationFn: (data) => callTool('contract_update_tax_id', data),
+    onSuccess: (response) => {
+      const data = response?.result || response
+      if (data.success) {
+        queryClient.invalidateQueries({ queryKey: ['contracts'] })
+        addNotification({
+          type: 'success',
+          message: `統編已更新！${data.note || ''}`
+        })
+        setShowTaxIdModal(false)
+        resetTaxIdForm()
+      } else {
+        addNotification({ type: 'error', message: data.message || '更新失敗' })
+      }
+    },
+    onError: (error) => {
+      addNotification({ type: 'error', message: `更新失敗: ${error.message}` })
+    }
+  })
+
+  // 重設續約表單
+  const resetRenewForm = () => {
+    setRenewForm({
+      new_start_date: '',
+      new_end_date: '',
+      new_monthly_rent: '',
+      notes: ''
+    })
+    setSelectedContract(null)
+  }
+
+  // 重設補統編表單
+  const resetTaxIdForm = () => {
+    setTaxIdForm({ company_tax_id: '' })
+    setSelectedContract(null)
+  }
+
+  // 開啟續約 Modal
+  const openRenewModal = (contract) => {
+    // 預填：新合約開始日 = 舊合約結束日次日
+    const oldEndDate = new Date(contract.end_date)
+    const newStartDate = new Date(oldEndDate)
+    newStartDate.setDate(newStartDate.getDate() + 1)
+
+    // 新合約結束日 = 新開始日 + 12 個月
+    const newEndDate = new Date(newStartDate)
+    newEndDate.setFullYear(newEndDate.getFullYear() + 1)
+
+    setRenewForm({
+      new_start_date: newStartDate.toISOString().split('T')[0],
+      new_end_date: newEndDate.toISOString().split('T')[0],
+      new_monthly_rent: contract.monthly_rent || '',
+      notes: ''
+    })
+    setSelectedContract(contract)
+    setShowRenewModal(true)
+  }
+
+  // 開啟補統編 Modal
+  const openTaxIdModal = (contract) => {
+    setTaxIdForm({
+      company_tax_id: contract.company_tax_id || ''
+    })
+    setSelectedContract(contract)
+    setShowTaxIdModal(true)
+  }
+
+  // 執行續約
+  const handleRenew = () => {
+    if (!renewForm.new_start_date || !renewForm.new_end_date) {
+      addNotification({ type: 'error', message: '請填寫新合約起訖日期' })
+      return
+    }
+
+    renewContract.mutate({
+      contract_id: selectedContract.id,
+      new_start_date: renewForm.new_start_date,
+      new_end_date: renewForm.new_end_date,
+      new_monthly_rent: renewForm.new_monthly_rent ? parseFloat(renewForm.new_monthly_rent) : null,
+      notes: renewForm.notes || null
+    })
+  }
+
+  // 執行補統編
+  const handleUpdateTaxId = () => {
+    if (!taxIdForm.company_tax_id || taxIdForm.company_tax_id.length !== 8) {
+      addNotification({ type: 'error', message: '統編格式錯誤，應為 8 碼' })
+      return
+    }
+
+    updateTaxId.mutate({
+      contract_id: selectedContract.id,
+      company_tax_id: taxIdForm.company_tax_id
+    })
+  }
 
   // 生成合約 PDF
   const handleGeneratePdf = async (contractId) => {
@@ -285,26 +426,21 @@ export default function Contracts() {
       header: '操作',
       accessor: 'id',
       cell: (row) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          {/* 生成 PDF */}
           <button
             onClick={(e) => {
               e.stopPropagation()
               handleGeneratePdf(row.id)
             }}
             disabled={generatingPdf === row.id}
-            className="btn-secondary text-xs py-1 px-2 disabled:opacity-50"
+            className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50"
             title="生成合約 PDF"
           >
             {generatingPdf === row.id ? (
-              <>
-                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                生成中...
-              </>
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <>
-                <FileDown className="w-3 h-3 mr-1" />
-                合約PDF
-              </>
+              <FileDown className="w-4 h-4" />
             )}
           </button>
           {pdfResult?.contractId === row.id && (
@@ -312,11 +448,37 @@ export default function Contracts() {
               href={pdfResult.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary-600 hover:text-primary-700"
+              className="p-1.5 text-primary-600 hover:bg-primary-50 rounded-lg"
               title="開啟 PDF"
             >
               <ExternalLink className="w-4 h-4" />
             </a>
+          )}
+          {/* 續約（只有 active 或 expired 可續約） */}
+          {(row.status === 'active' || row.status === 'expired') && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                openRenewModal(row)
+              }}
+              className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg"
+              title="續約"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          )}
+          {/* 補統編（沒有統編的合約才顯示） */}
+          {!row.company_tax_id && row.status !== 'cancelled' && row.status !== 'terminated' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                openTaxIdModal(row)
+              }}
+              className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg"
+              title="補統編"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
           )}
         </div>
       )
@@ -678,6 +840,196 @@ export default function Contracts() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* 續約 Modal */}
+      <Modal
+        open={showRenewModal}
+        onClose={() => {
+          setShowRenewModal(false)
+          resetRenewForm()
+        }}
+        title="合約續約"
+        size="md"
+        footer={
+          <>
+            <button
+              onClick={() => {
+                setShowRenewModal(false)
+                resetRenewForm()
+              }}
+              className="btn-secondary"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleRenew}
+              disabled={renewContract.isPending}
+              className="btn-primary bg-green-600 hover:bg-green-700"
+            >
+              {renewContract.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  處理中...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  確認續約
+                </>
+              )}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {/* 提示訊息 */}
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              續約將把原合約標記為「已續約」，並建立一份新合約。
+            </p>
+          </div>
+
+          {/* 原合約摘要 */}
+          {selectedContract && (
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-500 mb-1">原合約</p>
+              <p className="font-medium">{selectedContract.contract_number}</p>
+              <p className="text-sm text-gray-600">
+                {selectedContract.customers?.name} - {selectedContract.customers?.company_name || ''}
+              </p>
+              <p className="text-sm text-gray-600">
+                {selectedContract.start_date} ~ {selectedContract.end_date}
+              </p>
+              <p className="text-sm font-medium text-green-600">
+                月租 ${(selectedContract.monthly_rent || 0).toLocaleString()}
+              </p>
+            </div>
+          )}
+
+          {/* 新合約設定 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">
+                新合約起始日 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={renewForm.new_start_date}
+                onChange={(e) => setRenewForm({ ...renewForm, new_start_date: e.target.value })}
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="label">
+                新合約結束日 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={renewForm.new_end_date}
+                onChange={(e) => setRenewForm({ ...renewForm, new_end_date: e.target.value })}
+                className="input"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="label">新月租金（不填則沿用）</label>
+            <input
+              type="number"
+              value={renewForm.new_monthly_rent}
+              onChange={(e) => setRenewForm({ ...renewForm, new_monthly_rent: e.target.value })}
+              className="input"
+              placeholder={`原月租：${selectedContract?.monthly_rent || 0}`}
+            />
+          </div>
+
+          <div>
+            <label className="label">備註</label>
+            <textarea
+              value={renewForm.notes}
+              onChange={(e) => setRenewForm({ ...renewForm, notes: e.target.value })}
+              className="input resize-none"
+              rows={2}
+              placeholder="選填"
+            />
+          </div>
+        </div>
+      </Modal>
+
+      {/* 補統編 Modal */}
+      <Modal
+        open={showTaxIdModal}
+        onClose={() => {
+          setShowTaxIdModal(false)
+          resetTaxIdForm()
+        }}
+        title="補上公司統編"
+        size="sm"
+        footer={
+          <>
+            <button
+              onClick={() => {
+                setShowTaxIdModal(false)
+                resetTaxIdForm()
+              }}
+              className="btn-secondary"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleUpdateTaxId}
+              disabled={updateTaxId.isPending}
+              className="btn-primary"
+            >
+              {updateTaxId.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  更新中...
+                </>
+              ) : (
+                <>
+                  <Edit3 className="w-4 h-4 mr-2" />
+                  確認更新
+                </>
+              )}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {/* 提示訊息 */}
+          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800">
+              新設立公司取得統編後，請在此補上。更新後請重新產生合約 PDF。
+            </p>
+          </div>
+
+          {/* 合約摘要 */}
+          {selectedContract && (
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-500 mb-1">合約</p>
+              <p className="font-medium">{selectedContract.contract_number}</p>
+              <p className="text-sm text-gray-600">
+                {selectedContract.company_name || selectedContract.customers?.company_name || '無公司名稱'}
+              </p>
+            </div>
+          )}
+
+          <div>
+            <label className="label">
+              公司統編 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={taxIdForm.company_tax_id}
+              onChange={(e) => setTaxIdForm({ ...taxIdForm, company_tax_id: e.target.value })}
+              className="input"
+              placeholder="8 碼統一編號"
+              maxLength={8}
+            />
+          </div>
+        </div>
       </Modal>
     </div>
   )

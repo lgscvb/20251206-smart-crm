@@ -61,9 +61,28 @@ export default function Quotes() {
   const [statusFilter, setStatusFilter] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showConvertModal, setShowConvertModal] = useState(false) // 轉合約 Modal
   const [selectedQuote, setSelectedQuote] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(null) // 正在生成 PDF 的報價單 ID
+
+  // 轉合約表單狀態（承租人資訊）
+  const [contractForm, setContractForm] = useState({
+    company_name: '',
+    representative_name: '',
+    representative_address: '',
+    id_number: '',
+    company_tax_id: '',
+    phone: '',
+    email: '',
+    start_date: '',
+    end_date: '',
+    original_price: '',
+    monthly_rent: '',
+    deposit_amount: '',
+    payment_cycle: 'monthly',
+    payment_day: 5
+  })
 
   // 表單狀態
   const [form, setForm] = useState({
@@ -153,9 +172,9 @@ export default function Quotes() {
     }
   })
 
-  // 轉換為合約
+  // 轉換為合約（帶完整客戶資訊）
   const convertToContract = useMutation({
-    mutationFn: (quoteId) => callTool('quote_convert_to_contract', { quote_id: quoteId }),
+    mutationFn: (data) => callTool('quote_convert_to_contract', data),
     onSuccess: (response) => {
       const data = response?.result || response
       if (data.success) {
@@ -166,6 +185,8 @@ export default function Quotes() {
           message: `已成功轉換為合約 ${data.contract?.contract_number || ''}`
         })
         setShowDetailModal(false)
+        setShowConvertModal(false)
+        resetContractForm()
       } else {
         addNotification({ type: 'error', message: data.message || '轉換失敗' })
       }
@@ -174,6 +195,89 @@ export default function Quotes() {
       addNotification({ type: 'error', message: `轉換失敗: ${error.message}` })
     }
   })
+
+  // 重設轉合約表單
+  const resetContractForm = () => {
+    setContractForm({
+      company_name: '',
+      representative_name: '',
+      representative_address: '',
+      id_number: '',
+      company_tax_id: '',
+      phone: '',
+      email: '',
+      start_date: '',
+      end_date: '',
+      original_price: '',
+      monthly_rent: '',
+      deposit_amount: '',
+      payment_cycle: 'monthly',
+      payment_day: 5
+    })
+  }
+
+  // 開啟轉合約 Modal
+  const openConvertModal = (quote) => {
+    // 預填部分資料
+    const today = new Date()
+    const startDate = quote.proposed_start_date || today.toISOString().split('T')[0]
+    const months = quote.contract_months || 12
+    const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + months))
+
+    setContractForm({
+      company_name: quote.company_name || '',
+      representative_name: quote.customer_name || '',
+      representative_address: '',
+      id_number: '',
+      company_tax_id: '',
+      phone: quote.customer_phone || '',
+      email: quote.customer_email || '',
+      start_date: startDate,
+      end_date: endDate.toISOString().split('T')[0],
+      original_price: '',
+      monthly_rent: quote.total_amount ? Math.round(quote.total_amount / months) : '',
+      deposit_amount: quote.deposit_amount || '',
+      payment_cycle: 'monthly',
+      payment_day: 5
+    })
+    setSelectedQuote(quote)
+    setShowDetailModal(false)
+    setShowConvertModal(true)
+  }
+
+  // 執行轉換為合約
+  const handleConvertToContract = () => {
+    if (!contractForm.representative_name) {
+      addNotification({ type: 'error', message: '請填寫負責人姓名' })
+      return
+    }
+    if (!contractForm.phone) {
+      addNotification({ type: 'error', message: '請填寫聯絡電話' })
+      return
+    }
+    if (!contractForm.start_date || !contractForm.end_date) {
+      addNotification({ type: 'error', message: '請填寫合約起訖日期' })
+      return
+    }
+
+    convertToContract.mutate({
+      quote_id: selectedQuote.id,
+      company_name: contractForm.company_name || null,
+      representative_name: contractForm.representative_name,
+      representative_address: contractForm.representative_address || null,
+      id_number: contractForm.id_number || null,
+      company_tax_id: contractForm.company_tax_id || null,
+      phone: contractForm.phone,
+      email: contractForm.email || null,
+      start_date: contractForm.start_date,
+      end_date: contractForm.end_date,
+      original_price: contractForm.original_price ? parseFloat(contractForm.original_price) : null,
+      monthly_rent: contractForm.monthly_rent ? parseFloat(contractForm.monthly_rent) : null,
+      deposit_amount: contractForm.deposit_amount ? parseFloat(contractForm.deposit_amount) : null,
+      payment_cycle: contractForm.payment_cycle,
+      payment_day: contractForm.payment_day
+    })
+  }
 
   // 生成報價單 PDF (前端生成)
   const handleGeneratePdf = async (quote) => {
@@ -439,19 +543,12 @@ export default function Quotes() {
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                if (confirm('確定要將此報價單轉換為合約？')) {
-                  convertToContract.mutate(row.id)
-                }
+                openConvertModal(row)
               }}
               className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg"
               title="轉換為合約"
-              disabled={convertToContract.isPending}
             >
-              {convertToContract.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <ArrowRightCircle className="w-4 h-4" />
-              )}
+              <ArrowRightCircle className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -1000,25 +1097,11 @@ export default function Quotes() {
               )}
               {selectedQuote.status === 'accepted' && (
                 <button
-                  onClick={() => {
-                    if (confirm('確定要將此報價單轉換為合約？\n系統將建立一份草稿合約供您確認。')) {
-                      convertToContract.mutate(selectedQuote.id)
-                    }
-                  }}
+                  onClick={() => openConvertModal(selectedQuote)}
                   className="btn-primary bg-purple-600 hover:bg-purple-700"
-                  disabled={convertToContract.isPending}
                 >
-                  {convertToContract.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      轉換中...
-                    </>
-                  ) : (
-                    <>
-                      <ArrowRightCircle className="w-4 h-4 mr-2" />
-                      轉換為合約
-                    </>
-                  )}
+                  <ArrowRightCircle className="w-4 h-4 mr-2" />
+                  轉換為合約
                 </button>
               )}
               {selectedQuote.status === 'converted' && (
@@ -1029,6 +1112,238 @@ export default function Quotes() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* 轉合約 Modal - 填寫完整承租人資訊 */}
+      <Modal
+        open={showConvertModal}
+        onClose={() => {
+          setShowConvertModal(false)
+          resetContractForm()
+        }}
+        title="轉換為合約 - 填寫承租人資訊"
+        size="lg"
+        footer={
+          <>
+            <button
+              onClick={() => {
+                setShowConvertModal(false)
+                resetContractForm()
+              }}
+              className="btn-secondary"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleConvertToContract}
+              disabled={convertToContract.isPending}
+              className="btn-primary bg-purple-600 hover:bg-purple-700"
+            >
+              {convertToContract.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  建立中...
+                </>
+              ) : (
+                <>
+                  <ArrowRightCircle className="w-4 h-4 mr-2" />
+                  確認建立合約
+                </>
+              )}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          {/* 提示訊息 */}
+          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800">
+              請填寫完整的承租人資訊。報價單資料僅供參考，簽約時需重新確認客戶資料。
+            </p>
+          </div>
+
+          {/* 報價單摘要 */}
+          {selectedQuote && (
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">報價單</p>
+                  <p className="font-medium">{selectedQuote.quote_number}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">報價金額</p>
+                  <p className="font-bold text-green-600">${(selectedQuote.total_amount || 0).toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 承租人資訊（乙方） */}
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-medium text-blue-900 mb-4">承租人資訊（乙方）</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label">公司名稱</label>
+                <input
+                  type="text"
+                  value={contractForm.company_name}
+                  onChange={(e) => setContractForm({ ...contractForm, company_name: e.target.value })}
+                  className="input"
+                  placeholder="公司名稱（新設立可先空白）"
+                />
+              </div>
+              <div>
+                <label className="label">
+                  負責人姓名 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={contractForm.representative_name}
+                  onChange={(e) => setContractForm({ ...contractForm, representative_name: e.target.value })}
+                  className="input"
+                  placeholder="負責人姓名"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="label">負責人地址</label>
+                <input
+                  type="text"
+                  value={contractForm.representative_address}
+                  onChange={(e) => setContractForm({ ...contractForm, representative_address: e.target.value })}
+                  className="input"
+                  placeholder="戶籍地址"
+                />
+              </div>
+              <div>
+                <label className="label">身分證號碼</label>
+                <input
+                  type="text"
+                  value={contractForm.id_number}
+                  onChange={(e) => setContractForm({ ...contractForm, id_number: e.target.value })}
+                  className="input"
+                  placeholder="身分證/居留證號碼"
+                />
+              </div>
+              <div>
+                <label className="label">公司統編</label>
+                <input
+                  type="text"
+                  value={contractForm.company_tax_id}
+                  onChange={(e) => setContractForm({ ...contractForm, company_tax_id: e.target.value })}
+                  className="input"
+                  placeholder="8碼統編（新設立公司可空白）"
+                  maxLength={8}
+                />
+              </div>
+              <div>
+                <label className="label">
+                  聯絡電話 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={contractForm.phone}
+                  onChange={(e) => setContractForm({ ...contractForm, phone: e.target.value })}
+                  className="input"
+                  placeholder="聯絡電話"
+                />
+              </div>
+              <div>
+                <label className="label">E-mail</label>
+                <input
+                  type="email"
+                  value={contractForm.email}
+                  onChange={(e) => setContractForm({ ...contractForm, email: e.target.value })}
+                  className="input"
+                  placeholder="電子郵件"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 合約條件 */}
+          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+            <h3 className="font-medium text-green-900 mb-4">租賃條件</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label">
+                  合約起始日 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={contractForm.start_date}
+                  onChange={(e) => setContractForm({ ...contractForm, start_date: e.target.value })}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label">
+                  合約結束日 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={contractForm.end_date}
+                  onChange={(e) => setContractForm({ ...contractForm, end_date: e.target.value })}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label">定價（原價）</label>
+                <input
+                  type="number"
+                  value={contractForm.original_price}
+                  onChange={(e) => setContractForm({ ...contractForm, original_price: e.target.value })}
+                  className="input"
+                  placeholder="用於違約金計算"
+                />
+              </div>
+              <div>
+                <label className="label">月租金（折扣價）</label>
+                <input
+                  type="number"
+                  value={contractForm.monthly_rent}
+                  onChange={(e) => setContractForm({ ...contractForm, monthly_rent: e.target.value })}
+                  className="input"
+                  placeholder="實際月租金"
+                />
+              </div>
+              <div>
+                <label className="label">押金</label>
+                <input
+                  type="number"
+                  value={contractForm.deposit_amount}
+                  onChange={(e) => setContractForm({ ...contractForm, deposit_amount: e.target.value })}
+                  className="input"
+                  placeholder="押金金額"
+                />
+              </div>
+              <div>
+                <label className="label">繳費週期</label>
+                <select
+                  value={contractForm.payment_cycle}
+                  onChange={(e) => setContractForm({ ...contractForm, payment_cycle: e.target.value })}
+                  className="input"
+                >
+                  <option value="monthly">每月</option>
+                  <option value="quarterly">每季</option>
+                  <option value="semi_annual">每半年</option>
+                  <option value="annual">每年</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">繳費日</label>
+                <input
+                  type="number"
+                  value={contractForm.payment_day}
+                  onChange={(e) => setContractForm({ ...contractForm, payment_day: parseInt(e.target.value) || 5 })}
+                  className="input"
+                  min="1"
+                  max="28"
+                  placeholder="每期幾號繳費"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       </Modal>
     </div>
   )

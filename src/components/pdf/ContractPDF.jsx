@@ -164,28 +164,52 @@ const CONTRACT_TYPE_NAMES = {
 
 // 合約 PDF 元件
 export default function ContractPDF({ data }) {
+  // 支援新架構欄位（合約內儲存客戶資訊）和舊架構欄位（從 customers 表關聯）
   const {
     contract_number = '',
     branch_name = '台中館',
     branch_address = '',
     branch_phone = '',
+    // 新架構：直接從合約表讀取
     company_name = '',
+    representative_name = '',
+    representative_address = '',
+    company_tax_id = '',
+    // 舊架構：兼容舊有欄位名
     customer_name = '',
     tax_id = '',
     id_number = '',
     company_address = '',
     contact_phone = '',
+    phone = '',
     contact_email = '',
+    email = '',
     contract_type = 'coworking_fixed',
     start_date = '',
     end_date = '',
     periods = 12,
+    // 新架構：原價欄位
+    original_price = 0,
     list_price = 0,
+    monthly_rent = 0,
     monthly_fee = 0,
     payment_day = 5,
+    deposit_amount = 0,
     deposit = 0,
     notes = ''
   } = data
+
+  // 整合新舊欄位（優先使用新架構欄位）
+  const partyBCompany = company_name || ''
+  const partyBRepresentative = representative_name || customer_name || ''
+  const partyBAddress = representative_address || company_address || ''
+  const partyBTaxId = company_tax_id || tax_id || ''
+  const partyBIdNumber = id_number || ''
+  const partyBPhone = phone || contact_phone || ''
+  const partyBEmail = email || contact_email || ''
+  const listPriceValue = original_price || list_price || 0
+  const monthlyFeeValue = monthly_rent || monthly_fee || 0
+  const depositValue = deposit_amount || deposit || 0
 
   // 格式化日期
   const formatDate = (dateStr) => {
@@ -201,7 +225,8 @@ export default function ContractPDF({ data }) {
   const todayDay = today.getDate()
 
   const contractTypeName = CONTRACT_TYPE_NAMES[contract_type] || contract_type
-  const partyBName = company_name || customer_name
+  // 乙方名稱：優先顯示公司名稱，否則顯示負責人姓名
+  const partyBName = partyBCompany || partyBRepresentative
 
   return (
     <Document>
@@ -259,11 +284,11 @@ export default function ContractPDF({ data }) {
             </View>
             <View style={styles.tableRow}>
               <Text style={styles.tableHeader}>月租金定價</Text>
-              <Text style={styles.tableCell}>新台幣 {formatCurrency(list_price)} 元整</Text>
+              <Text style={styles.tableCell}>新台幣 {formatCurrency(listPriceValue)} 元整</Text>
             </View>
             <View style={styles.tableRow}>
               <Text style={styles.tableHeader}>優惠後月租</Text>
-              <Text style={styles.tableCell}>新台幣 {formatCurrency(monthly_fee)} 元整</Text>
+              <Text style={styles.tableCell}>新台幣 {formatCurrency(monthlyFeeValue)} 元整</Text>
             </View>
             <View style={styles.tableRow}>
               <Text style={styles.tableHeader}>繳款日</Text>
@@ -271,7 +296,7 @@ export default function ContractPDF({ data }) {
             </View>
             <View style={styles.tableRow}>
               <Text style={styles.tableHeader}>履約保證金</Text>
-              <Text style={styles.tableCell}>新台幣 {formatCurrency(deposit)} 元整</Text>
+              <Text style={styles.tableCell}>新台幣 {formatCurrency(depositValue)} 元整</Text>
             </View>
           </View>
           <Text style={styles.articleContent}>
@@ -283,7 +308,7 @@ export default function ContractPDF({ data }) {
         <View style={styles.article}>
           <Text style={styles.articleTitle}>第四條（履約保證金）</Text>
           <Text style={styles.articleContent}>
-            乙方應於簽約時繳納履約保證金新台幣 {formatCurrency(deposit)} 元整，於租賃期滿並完成點交後無息退還。如乙方有違約情事或積欠租金，甲方得自保證金中扣抵。
+            乙方應於簽約時繳納履約保證金新台幣 {formatCurrency(depositValue)} 元整，於租賃期滿並完成點交後無息退還。如乙方有違約情事或積欠租金，甲方得自保證金中扣抵。
           </Text>
         </View>
 
@@ -365,22 +390,22 @@ export default function ContractPDF({ data }) {
                 <Text>公司/姓名：{partyBName}</Text>
               </View>
               <View style={styles.signatureLine}>
-                <Text>統一編號：{tax_id}</Text>
+                <Text>統一編號：{partyBTaxId}</Text>
               </View>
               <View style={styles.signatureLine}>
-                <Text>身分證號：{id_number}</Text>
+                <Text>身分證號：{partyBIdNumber}</Text>
               </View>
               <View style={styles.signatureLine}>
-                <Text>地址：{company_address}</Text>
+                <Text>地址：{partyBAddress}</Text>
               </View>
               <View style={styles.signatureLine}>
-                <Text>電話：{contact_phone}</Text>
+                <Text>電話：{partyBPhone}</Text>
               </View>
               <View style={styles.signatureLine}>
-                <Text>Email：{contact_email}</Text>
+                <Text>Email：{partyBEmail}</Text>
               </View>
               <View style={styles.signatureLine}>
-                <Text>負責人：{customer_name}</Text>
+                <Text>負責人：{partyBRepresentative}</Text>
               </View>
               <View style={styles.signatureLine}>
                 <Text>簽章：</Text>
