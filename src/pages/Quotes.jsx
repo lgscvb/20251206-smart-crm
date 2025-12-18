@@ -79,7 +79,7 @@ const SERVICE_PRESETS = {
     original_price: 3000, // 原價（用於合約）
     hasSubOptions: true, // 標記有子選項
     items: [
-      { name: '商登月租費', quantity: 12, unit_price: 1490, amount: 17880 }
+      { name: '商登月租費', quantity: 12, unit: '月', unit_price: 1490, amount: 17880 }
     ]
   },
   office: {
@@ -89,7 +89,7 @@ const SERVICE_PRESETS = {
     contract_months: 12,
     deposit_amount: 0, // 依辦公室定
     items: [
-      { name: '辦公室月租', quantity: 1, unit_price: 0, amount: 0 }
+      { name: '辦公室月租', quantity: 1, unit: '月', unit_price: 0, amount: 0 }
     ],
     // 辦公室子選項（價格需手動調整）
     subOptions: [
@@ -106,7 +106,7 @@ const SERVICE_PRESETS = {
     contract_months: 1,
     deposit_amount: 0,
     items: [
-      { name: '共享辦公位月租', quantity: 1, unit_price: 3000, amount: 3000 }
+      { name: '共享辦公位月租', quantity: 1, unit: '月', unit_price: 3000, amount: 3000 }
     ]
   },
   meeting_room: {
@@ -116,7 +116,7 @@ const SERVICE_PRESETS = {
     contract_months: 1,
     deposit_amount: 0,
     items: [
-      { name: '會議室租用', quantity: 1, unit_price: 2000, amount: 2000 }
+      { name: '會議室租用', quantity: 1, unit: '小時', unit_price: 2000, amount: 2000 }
     ]
   },
   custom: {
@@ -126,7 +126,7 @@ const SERVICE_PRESETS = {
     contract_months: 12,
     deposit_amount: 0,
     items: [
-      { name: '', quantity: 1, unit_price: 0, amount: 0 }
+      { name: '', quantity: 1, unit: '', unit_price: 0, amount: 0 }
     ]
   }
 }
@@ -169,7 +169,7 @@ export default function Quotes() {
     plan_name: '',
     contract_months: 12,
     original_price: 3000, // 原價（營業登記預設 3000）
-    items: [{ name: '商登月租費', quantity: 12, unit_price: 1490, amount: 17880 }],
+    items: [{ name: '商登月租費', quantity: 12, unit: '月', unit_price: 1490, amount: 17880 }],
     discount_amount: 0,
     discount_note: '',
     deposit_amount: 6000,
@@ -406,7 +406,7 @@ export default function Quotes() {
       plan_name: '營業登記方案',
       contract_months: 12,
       original_price: 3000, // 營業登記原價
-      items: [{ name: '商登月租費', quantity: 12, unit_price: 1490, amount: 17880 }],
+      items: [{ name: '商登月租費', quantity: 12, unit: '月', unit_price: 1490, amount: 17880 }],
       discount_amount: 0,
       discount_note: '',
       deposit_amount: 6000,
@@ -455,7 +455,7 @@ export default function Quotes() {
   const addItem = () => {
     setForm({
       ...form,
-      items: [...form.items, { name: '', quantity: 1, unit_price: 0, amount: 0 }]
+      items: [...form.items, { name: '', quantity: 1, unit: '月', unit_price: 0, amount: 0 }]
     })
   }
 
@@ -983,6 +983,15 @@ export default function Quotes() {
                 + 新增項目
               </button>
             </div>
+            {/* 欄位標題 */}
+            <div className="flex items-center gap-2 mb-2 text-xs text-gray-500 font-medium">
+              <span className="flex-1">項目名稱</span>
+              <span className="w-16 text-center">數量</span>
+              <span className="w-16 text-center">單位</span>
+              <span className="w-28 text-center">單價</span>
+              <span className="w-28 text-right">金額</span>
+              <span className="w-8"></span>
+            </div>
             <div className="space-y-2">
               {form.items.map((item, index) => (
                 <div key={index} className="flex items-center gap-2">
@@ -1006,9 +1015,20 @@ export default function Quotes() {
                       setForm({ ...form, items: newItems })
                       updateItemAmount(index)
                     }}
-                    className="input w-20"
+                    className="input w-16 text-center"
                     placeholder="數量"
                     min="0"
+                  />
+                  <input
+                    type="text"
+                    value={item.unit || ''}
+                    onChange={(e) => {
+                      const newItems = [...form.items]
+                      newItems[index].unit = e.target.value
+                      setForm({ ...form, items: newItems })
+                    }}
+                    className="input w-16 text-center"
+                    placeholder="月"
                   />
                   <input
                     type="number"
@@ -1019,7 +1039,7 @@ export default function Quotes() {
                       setForm({ ...form, items: newItems })
                       updateItemAmount(index)
                     }}
-                    className="input w-28"
+                    className="input w-28 text-right"
                     placeholder="單價"
                     min="0"
                   />
