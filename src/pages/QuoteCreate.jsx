@@ -586,9 +586,6 @@ export default function QuoteCreate() {
             <div className="p-8">
               {/* 標題區 */}
               <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-[#2d5a27] rounded-full mx-auto mb-2 flex items-center justify-center">
-                  <span className="text-white text-xl font-bold">HJ</span>
-                </div>
                 <div className="text-[#2d5a27] text-xs tracking-widest mb-2">HOUR JUNGLE</div>
                 <h2 className="text-xl font-bold text-[#2d5a27]">
                   HourJungle {getBranchName()}報價單
@@ -654,22 +651,22 @@ export default function QuoteCreate() {
               </div>
 
               {/* 銀行資訊 */}
-              <div className="mb-6 text-sm">
-                <div className="flex border-b py-2">
-                  <span className="w-20 text-gray-500 bg-gray-50 px-2">帳戶名稱：</span>
-                  <span className="flex-1 text-right px-2">你的空間有限公司</span>
+              <div className="mb-6 text-sm border rounded">
+                <div className="flex items-center border-b">
+                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-3 py-2">帳戶名稱</span>
+                  <span className="flex-1 text-right px-3 py-2">你的空間有限公司</span>
                 </div>
-                <div className="flex border-b py-2">
-                  <span className="w-20 text-gray-500 bg-gray-50 px-2">銀行名稱：</span>
-                  <span className="flex-1 text-right px-2">永豐商業銀行(南台中分行)</span>
+                <div className="flex items-center border-b">
+                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-3 py-2">銀行名稱</span>
+                  <span className="flex-1 text-right px-3 py-2">永豐商業銀行(南台中分行)</span>
                 </div>
-                <div className="flex border-b py-2">
-                  <span className="w-20 text-gray-500 bg-gray-50 px-2">行庫代號：</span>
-                  <span className="flex-1 text-right px-2">807</span>
+                <div className="flex items-center border-b">
+                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-3 py-2">行庫代號</span>
+                  <span className="flex-1 text-right px-3 py-2">807</span>
                 </div>
-                <div className="flex border-b py-2">
-                  <span className="w-20 text-gray-500 bg-gray-50 px-2">帳號：</span>
-                  <span className="flex-1 text-right px-2">03801800183399</span>
+                <div className="flex items-center">
+                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-3 py-2">帳號</span>
+                  <span className="flex-1 text-right px-3 py-2">03801800183399</span>
                 </div>
               </div>
 
