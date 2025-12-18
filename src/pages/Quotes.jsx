@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { callTool, db, crm } from '../services/api'
 import useStore from '../store/useStore'
@@ -132,6 +133,7 @@ const SERVICE_PRESETS = {
 }
 
 export default function Quotes() {
+  const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
@@ -720,10 +722,7 @@ export default function Quotes() {
             </select>
           </div>
           <button
-            onClick={() => {
-              resetForm()
-              setShowCreateModal(true)
-            }}
+            onClick={() => navigate('/quotes/new')}
             className="btn-primary"
           >
             <Plus className="w-4 h-4 mr-2" />

@@ -10,6 +10,7 @@ import Payments from './pages/Payments'
 import Renewals from './pages/Renewals'
 import Commissions from './pages/Commissions'
 import Quotes from './pages/Quotes'
+import QuoteCreate from './pages/QuoteCreate'
 import Invoices from './pages/Invoices'
 import LegalLetters from './pages/LegalLetters'
 import Reports from './pages/Reports'
@@ -42,6 +43,7 @@ function App() {
         <Route path="commissions" element={<Commissions />} />
         <Route path="reports" element={<Reports />} />
         <Route path="quotes" element={<Quotes />} />
+        <Route path="quotes/new" element={<QuoteCreate />} />
         <Route path="prospects" element={<Prospects />} />
         <Route path="ai-assistant" element={<AIAssistant />} />
         <Route path="data-validation" element={<DataValidation />} />
