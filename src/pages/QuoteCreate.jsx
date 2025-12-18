@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Save, Loader2, Trash2 } from 'lucide-react'
 import { callTool, db } from '../services/api'
 import useStore from '../store/useStore'
+import { pdf } from '@react-pdf/renderer'
+import QuotePDF from '../components/pdf/QuotePDF'
 
 // 營業登記方案選項
 const VIRTUAL_OFFICE_OPTIONS = {
@@ -109,14 +111,71 @@ export default function QuoteCreate() {
     customer_notes: ''
   })
 
+  // 生成並下載 PDF
+  const generateAndDownloadPdf = async (quote) => {
+    try {
+      const branch = branches?.find(b => b.id === parseInt(form.branch_id))
+      // 計算有效期限
+      const today = new Date()
+      const validFrom = today.toISOString().split('T')[0]
+      const validUntilDate = new Date(today)
+      validUntilDate.setDate(validUntilDate.getDate() + form.valid_days)
+      const validUntil = validUntilDate.toISOString().split('T')[0]
+
+      // 計算總金額
+      const subtotal = form.items.reduce((sum, item) => sum + (item.amount || 0), 0)
+      const totalAmount = subtotal - (parseFloat(form.discount_amount) || 0)
+
+      const pdfData = {
+        quote_number: quote.quote_number,
+        valid_from: validFrom,
+        valid_until: validUntil,
+        branch_name: branch?.name || '台中館',
+        plan_name: form.plan_name,
+        items: form.items,
+        deposit_amount: parseFloat(form.deposit_amount) || 0,
+        total_amount: totalAmount,
+        bank_account_name: '你的空間有限公司',
+        bank_name: '永豐商業銀行(南台中分行)',
+        bank_code: '807',
+        bank_account_number: '03801800183399',
+        contact_email: 'wtxg@hourjungle.com',
+        contact_phone: '04-23760282'
+      }
+
+      const blob = await pdf(<QuotePDF data={pdfData} />).toBlob()
+      const url = URL.createObjectURL(blob)
+
+      // 自動下載
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `報價單_${quote.quote_number}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      addNotification({ type: 'success', message: '報價單 PDF 已下載' })
+    } catch (error) {
+      console.error('生成 PDF 失敗:', error)
+      addNotification({ type: 'warning', message: '報價單已建立，但 PDF 下載失敗' })
+    }
+  }
+
   // 建立報價單
   const createQuote = useMutation({
     mutationFn: (data) => callTool('quote_create', data),
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       const data = response?.result || response
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['quotes'] })
         addNotification({ type: 'success', message: '報價單建立成功' })
+
+        // 同時下載 PDF
+        if (data.quote) {
+          await generateAndDownloadPdf(data.quote)
+        }
+
         navigate('/quotes')
       } else {
         addNotification({ type: 'error', message: data.message || '建立失敗' })
@@ -183,7 +242,7 @@ export default function QuoteCreate() {
       company_name: form.company_name || null,
       contract_type: form.contract_type,
       plan_name: form.plan_name || null,
-      contract_months: form.contract_months,
+      contract_months: parseInt(form.contract_months) || 12,
       original_price: parseFloat(form.original_price) || null,
       items: form.items,
       discount_amount: parseFloat(form.discount_amount) || 0,
@@ -419,7 +478,13 @@ export default function QuoteCreate() {
                 <input
                   type="number"
                   value={form.contract_months}
-                  onChange={(e) => setForm({ ...form, contract_months: parseInt(e.target.value) || 12 })}
+                  onChange={(e) => setForm({ ...form, contract_months: e.target.value === '' ? '' : parseInt(e.target.value) })}
+                  onBlur={(e) => {
+                    // 失焦時確保有有效值
+                    if (!form.contract_months || form.contract_months < 1) {
+                      setForm({ ...form, contract_months: 12 })
+                    }
+                  }}
                   className="input"
                   min="1"
                 />
@@ -597,6 +662,7 @@ export default function QuoteCreate() {
                 <div>報價單號：Q{new Date().toISOString().slice(0, 10).replace(/-/g, '')}-XXXX</div>
                 <div>報價日期：{validFrom}</div>
                 <div>有效期限：{validUntil}</div>
+                <div className="font-medium text-gray-700">合約期限：{form.contract_months} 個月（{form.contract_months >= 12 ? `${Math.floor(form.contract_months / 12)}年${form.contract_months % 12 > 0 ? `${form.contract_months % 12}個月` : ''}` : `${form.contract_months}個月`}）</div>
               </div>
 
               {/* 服務項目表格 */}

@@ -17,8 +17,11 @@ import {
   ChevronDown,
   Undo2,
   History,
-  Scale
+  Scale,
+  Plus,
+  Loader2
 } from 'lucide-react'
+import api from '../services/api'
 
 // 應收款可選欄位
 const DUE_COLUMNS = {
@@ -66,6 +69,15 @@ export default function Payments() {
   const [reminderMessage, setReminderMessage] = useState('')
   const [pageSize, setPageSize] = useState(15)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
+
+  // 生成待繳記錄相關狀態
+  const [showGenerateModal, setShowGenerateModal] = useState(false)
+  const [generatePeriod, setGeneratePeriod] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [generating, setGenerating] = useState(false)
+  const [generateResult, setGenerateResult] = useState(null)
 
   // 應收款欄位狀態
   const [dueVisibleColumns, setDueVisibleColumns] = useState(() => {
@@ -142,6 +154,28 @@ export default function Payments() {
     setUndoReason('')
     refetchPaid()
     refetchDue()
+  }
+
+  // 生成待繳記錄
+  const handleGeneratePayments = async () => {
+    setGenerating(true)
+    setGenerateResult(null)
+    try {
+      const response = await api.post('/api/db/rpc/generate_monthly_payments', {
+        target_period: generatePeriod
+      })
+      // PostgREST 函數會回傳陣列，取第一筆
+      const result = Array.isArray(response.data) ? response.data[0] : response.data
+      setGenerateResult(result)
+      // 重新整理列表
+      refetchDue()
+      refetchOverdue()
+    } catch (error) {
+      console.error('生成待繳記錄失敗:', error)
+      setGenerateResult({ error: error.response?.data?.message || error.message || '生成失敗' })
+    } finally {
+      setGenerating(false)
+    }
   }
 
   // 應收款所有欄位定義
@@ -628,6 +662,16 @@ export default function Payments() {
           </div>
 
           <button
+            onClick={() => {
+              setGenerateResult(null)
+              setShowGenerateModal(true)
+            }}
+            className="btn-primary"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            生成待繳
+          </button>
+          <button
             onClick={() => navigate('/payments/legal-letters')}
             className="btn-secondary"
           >
@@ -887,6 +931,126 @@ export default function Payments() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* 生成待繳記錄 Modal */}
+      <Modal
+        open={showGenerateModal}
+        onClose={() => {
+          if (!generating) {
+            setShowGenerateModal(false)
+            setGenerateResult(null)
+          }
+        }}
+        title="生成待繳記錄"
+        size="sm"
+        footer={
+          generateResult && !generateResult.error ? (
+            <button
+              onClick={() => {
+                setShowGenerateModal(false)
+                setGenerateResult(null)
+              }}
+              className="btn-primary"
+            >
+              完成
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => {
+                  setShowGenerateModal(false)
+                  setGenerateResult(null)
+                }}
+                disabled={generating}
+                className="btn-secondary"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleGeneratePayments}
+                disabled={generating}
+                className="btn-primary"
+              >
+                {generating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    處理中...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    生成記錄
+                  </>
+                )}
+              </button>
+            </>
+          )
+        }
+      >
+        <div className="space-y-4">
+          {/* 說明 */}
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+            <p className="text-sm text-blue-700">
+              為所有活躍合約自動生成指定月份的待繳記錄。已存在的記錄會自動跳過。
+            </p>
+          </div>
+
+          {/* 月份選擇 */}
+          <div>
+            <label htmlFor="generate-period" className="label">目標月份</label>
+            <input
+              id="generate-period"
+              type="month"
+              value={generatePeriod}
+              onChange={(e) => setGeneratePeriod(e.target.value)}
+              disabled={generating || (generateResult && !generateResult.error)}
+              className="input"
+            />
+          </div>
+
+          {/* 結果顯示 */}
+          {generateResult && (
+            <div className={`p-4 rounded-lg border ${
+              generateResult.error
+                ? 'bg-red-50 border-red-200'
+                : 'bg-green-50 border-green-200'
+            }`}>
+              {generateResult.error ? (
+                <div className="text-red-700">
+                  <p className="font-medium">生成失敗</p>
+                  <p className="text-sm mt-1">{generateResult.error}</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="font-medium text-green-700">生成完成</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">處理合約：</span>
+                      <span className="font-medium">{generateResult.contracts_processed} 筆</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">新建記錄：</span>
+                      <span className="font-medium text-green-600">{generateResult.payments_created} 筆</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">總金額：</span>
+                      <span className="font-medium text-green-600">${Number(generateResult.total_amount || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">已存在跳過：</span>
+                      <span className="font-medium text-gray-500">{generateResult.skipped_existing} 筆</span>
+                    </div>
+                    <div className="flex justify-between col-span-2">
+                      <span className="text-gray-600">本月無需繳費：</span>
+                      <span className="font-medium text-gray-500">{generateResult.skipped_no_payment} 筆</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   )

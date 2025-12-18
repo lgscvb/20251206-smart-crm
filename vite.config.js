@@ -6,12 +6,21 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/proxy': {
-        // 使用 HTTPS 域名而非 HTTP IP（Cloudflare 強制 HTTPS）
+      // API 代理（本地開發用）
+      '/api/db': {
         target: 'https://auto.yourspce.org',
         changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/proxy/, '')
+        secure: true
+      },
+      '/tools': {
+        target: 'https://auto.yourspce.org',
+        changeOrigin: true,
+        secure: true
+      },
+      '/ai': {
+        target: 'https://auto.yourspce.org',
+        changeOrigin: true,
+        secure: true
       }
     }
   }

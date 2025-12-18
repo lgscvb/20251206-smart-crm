@@ -157,7 +157,7 @@ export default function Quotes() {
     monthly_rent: '',
     deposit_amount: '',
     payment_cycle: 'monthly',
-    payment_day: 5
+    payment_day: new Date().getDate()  // 預設為當日
   })
 
   // 表單狀態
@@ -264,6 +264,8 @@ export default function Quotes() {
         setShowDetailModal(false)
         setShowConvertModal(false)
         resetContractForm()
+        // 跳轉到合約管理頁面
+        navigate('/contracts')
       } else {
         addNotification({ type: 'error', message: data.message || '轉換失敗' })
       }
@@ -289,7 +291,7 @@ export default function Quotes() {
       monthly_rent: '',
       deposit_amount: '',
       payment_cycle: 'monthly',
-      payment_day: 5
+      payment_day: new Date().getDate()  // 預設為當日
     })
   }
 
@@ -318,7 +320,7 @@ export default function Quotes() {
       monthly_rent: monthlyRent,
       deposit_amount: quote.deposit_amount || '',
       payment_cycle: 'monthly',
-      payment_day: 5
+      payment_day: new Date().getDate()  // 預設為當日
     })
     setSelectedQuote(quote)
     setShowDetailModal(false)
@@ -1520,13 +1522,19 @@ export default function Quotes() {
               <div>
                 <label className="label">繳費日</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={contractForm.payment_day}
-                  onChange={(e) => setContractForm({ ...contractForm, payment_day: parseInt(e.target.value) || 5 })}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '')  // 只允許數字
+                    const num = parseInt(val) || ''
+                    if (val === '' || (num >= 1 && num <= 31)) {
+                      setContractForm({ ...contractForm, payment_day: val === '' ? '' : num })
+                    }
+                  }}
                   className="input"
-                  min="1"
-                  max="28"
-                  placeholder="每期幾號繳費"
+                  placeholder="每期幾號繳費 (1-31)"
                 />
               </div>
             </div>
