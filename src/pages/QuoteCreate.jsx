@@ -600,16 +600,16 @@ export default function QuoteCreate() {
               </div>
 
               {/* 服務項目表格 */}
-              <div className="border rounded-lg overflow-hidden mb-6">
+              <div className="border rounded-lg overflow-hidden mb-4 text-xs">
                 {/* 表頭 */}
                 <div className="flex bg-gray-100 border-b">
-                  <div className="flex-1 p-3 text-center font-bold text-sm">服務項目</div>
-                  <div className="w-32 p-3 text-center font-bold text-sm">請款金額 (NTD)</div>
+                  <div className="flex-1 p-2 text-center font-bold">服務項目</div>
+                  <div className="w-28 p-2 text-center font-bold">請款金額 (NTD)</div>
                 </div>
 
                 {/* 方案標題 */}
                 {form.plan_name && (
-                  <div className="bg-gray-50 border-b p-3 text-center font-medium text-sm">
+                  <div className="bg-gray-50 border-b p-2 text-center font-medium">
                     {form.plan_name}（依合約內指定付款時間點）
                   </div>
                 )}
@@ -617,7 +617,7 @@ export default function QuoteCreate() {
                 {/* 項目列表 */}
                 {form.items.map((item, index) => (
                   <div key={index} className="flex border-b">
-                    <div className="flex-1 p-3 text-sm">
+                    <div className="flex-1 p-2">
                       {item.name || '（項目名稱）'}
                       {item.quantity > 1 && item.unit && (
                         <span className="text-gray-500 ml-1">
@@ -625,7 +625,7 @@ export default function QuoteCreate() {
                         </span>
                       )}
                     </div>
-                    <div className="w-32 p-3 text-right text-sm font-mono">
+                    <div className="w-28 p-2 text-right font-mono">
                       {formatCurrency(item.amount)}
                     </div>
                   </div>
@@ -634,8 +634,8 @@ export default function QuoteCreate() {
                 {/* 押金 */}
                 {parseFloat(form.deposit_amount) > 0 && (
                   <div className="flex border-b">
-                    <div className="flex-1 p-3 text-sm">押金</div>
-                    <div className="w-32 p-3 text-right text-sm font-mono">
+                    <div className="flex-1 p-2">押金</div>
+                    <div className="w-28 p-2 text-right font-mono">
                       {formatCurrency(form.deposit_amount)}
                     </div>
                   </div>
@@ -643,40 +643,46 @@ export default function QuoteCreate() {
 
                 {/* 合計 */}
                 <div className="flex bg-gray-50">
-                  <div className="flex-1 p-3 text-center font-bold text-[#2d5a27]">合計</div>
-                  <div className="w-32 p-3 text-right font-bold text-[#2d5a27] font-mono">
+                  <div className="flex-1 p-2 text-center font-bold text-[#2d5a27] text-sm">合計</div>
+                  <div className="w-28 p-2 text-right font-bold text-[#2d5a27] text-sm font-mono">
                     {formatCurrency(total + (parseFloat(form.deposit_amount) || 0))}
                   </div>
                 </div>
               </div>
 
               {/* 銀行資訊 */}
-              <div className="mb-6 text-sm border rounded">
+              <div className="mb-4 text-xs border rounded">
                 <div className="flex items-center border-b">
-                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-3 py-2">帳戶名稱</span>
-                  <span className="flex-1 text-right px-3 py-2">你的空間有限公司</span>
+                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-2 py-1">帳戶名稱</span>
+                  <span className="flex-1 text-right px-2 py-1">你的空間有限公司</span>
                 </div>
                 <div className="flex items-center border-b">
-                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-3 py-2">銀行名稱</span>
-                  <span className="flex-1 text-right px-3 py-2">永豐商業銀行(南台中分行)</span>
+                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-2 py-1">銀行名稱</span>
+                  <span className="flex-1 text-right px-2 py-1">永豐商業銀行(南台中分行)</span>
                 </div>
                 <div className="flex items-center border-b">
-                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-3 py-2">行庫代號</span>
-                  <span className="flex-1 text-right px-3 py-2">807</span>
+                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-2 py-1">行庫代號</span>
+                  <span className="flex-1 text-right px-2 py-1">807</span>
                 </div>
                 <div className="flex items-center">
-                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-3 py-2">帳號</span>
-                  <span className="flex-1 text-right px-3 py-2">03801800183399</span>
+                  <span className="whitespace-nowrap text-gray-500 bg-gray-50 px-2 py-1">帳號</span>
+                  <span className="flex-1 text-right px-2 py-1">03801800183399</span>
                 </div>
               </div>
 
               {/* 備註 */}
-              <div className="bg-gray-50 rounded-lg p-4 text-xs text-gray-600 leading-relaxed">
-                <div className="font-bold mb-2">備註：</div>
+              <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-600 leading-relaxed">
+                <div className="font-bold mb-1">備註：</div>
                 <div>1. 報價有效期間：即日起{form.valid_days}天內。</div>
                 <div>2. 獨家！威立方（V-CUBE）集團，指定合作夥伴E樂堂企業內訓系統會員免費獨享。</div>
-                <div>3. 超過百間以上蝦皮店家登記指定選擇hourjungle。</div>
-                <div>4. 全台灣唯一敢在合約內註明如因我方因素主管機關不予核准，全額退費！</div>
+                <div>3. 超過百間以上蝦皮店家登記指定選擇hourjungle，可登記使用免用統一發票（限無店面零售業）電商最划算的選擇。</div>
+                <div>4. 全台灣唯一敢在合約內註明如因我方因素主管機關不予核准，我們全額退費！</div>
+                <div>5. 多位知名客戶阿里巴巴、UBER、唐吉軻德、arrow（全球五百大企業）指定選擇解決方案。</div>
+                <div>6. 獨家！蝦皮商城免費健檢！提供金、物流、包材、bsmi、財稅法一站式解決方案。再送一年免費稅務諮詢。</div>
+                <div>7. 獨家！勞動部TTQS認證單位，不定期超過百種創業課程會員免費獨享。</div>
+                <div>8. 獨家經濟部中小企業處認證國際育成中心！</div>
+                <div>9. 獨家！國科會科研平台輔導業師進駐。</div>
+                <div>10. 有任何問題請洽詢公司信箱 wtxg@hourjungle.com 或電話 04-23760282。</div>
               </div>
 
               {/* 頁尾提醒 */}
