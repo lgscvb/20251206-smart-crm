@@ -118,6 +118,12 @@ const STAMP_IMAGES = {
   2: '/images/stamp-pivotfrontier.png'   // 樞紐前沿股份有限公司（環瑞館）
 }
 
+// 印章尺寸（72 DPI，公分換算像素）
+const STAMP_SIZES = {
+  1: { width: 148, height: 90 },   // 大忠館：5.21cm × 3.16cm
+  2: { width: 165, height: 114 }   // 環瑞館：5.82cm × 4.03cm
+}
+
 // 合約 PDF 元件
 export default function ContractPDF({ data }) {
   const {
@@ -148,8 +154,9 @@ export default function ContractPDF({ data }) {
     show_stamp = false
   } = data
 
-  // 取得印章圖片路徑
+  // 取得印章圖片路徑和尺寸
   const stampImage = STAMP_IMAGES[branch_id] || STAMP_IMAGES[1]
+  const stampSize = STAMP_SIZES[branch_id] || STAMP_SIZES[1]
 
   // 今日日期（民國）
   const today = new Date()
@@ -286,9 +293,9 @@ export default function ContractPDF({ data }) {
 
             {/* 印章區域 */}
             {show_stamp ? (
-              <Image src={stampImage} />
+              <Image src={stampImage} style={{ width: stampSize.width, height: stampSize.height }} />
             ) : (
-              <View style={{ width: 120, height: 80 }} />
+              <View style={{ width: stampSize.width, height: stampSize.height }} />
             )}
           </View>
 

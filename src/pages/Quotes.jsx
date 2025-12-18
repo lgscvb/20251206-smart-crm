@@ -60,7 +60,8 @@ const CONTRACT_TYPES = {
 
 // 營業登記方案選項
 const VIRTUAL_OFFICE_OPTIONS = {
-  prices: [1490, 1690, 1800, 2000],
+  original_price: 3000, // 原價
+  prices: [1490, 1690, 1800, 2000], // 折扣價選項
   cycles: [
     { label: '年繳', months: 12 },
     { label: '半年繳', months: 6 }
@@ -75,6 +76,7 @@ const SERVICE_PRESETS = {
     plan_name: '營業登記方案',
     contract_months: 12,
     deposit_amount: 6000,
+    original_price: 3000, // 原價（用於合約）
     hasSubOptions: true, // 標記有子選項
     items: [
       { name: '商登月租費', quantity: 12, unit_price: 1490, amount: 17880 }
@@ -166,7 +168,8 @@ export default function Quotes() {
     contract_type: 'virtual_office',
     plan_name: '',
     contract_months: 12,
-    items: [{ name: '商登月租費', quantity: 12, unit_price: 5000, amount: 60000 }],
+    original_price: 3000, // 原價（營業登記預設 3000）
+    items: [{ name: '商登月租費', quantity: 12, unit_price: 1490, amount: 17880 }],
     discount_amount: 0,
     discount_note: '',
     deposit_amount: 6000,
@@ -296,6 +299,9 @@ export default function Quotes() {
     const months = quote.contract_months || 12
     const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + months))
 
+    // 計算月租（折扣價）= 總金額 / 月數
+    const monthlyRent = quote.total_amount ? Math.round(quote.total_amount / months) : ''
+
     setContractForm({
       company_name: quote.company_name || '',
       representative_name: quote.customer_name || '',
@@ -306,8 +312,8 @@ export default function Quotes() {
       email: quote.customer_email || '',
       start_date: startDate,
       end_date: endDate.toISOString().split('T')[0],
-      original_price: '',
-      monthly_rent: quote.total_amount ? Math.round(quote.total_amount / months) : '',
+      original_price: quote.original_price || '', // 自動帶入報價單的原價
+      monthly_rent: monthlyRent,
       deposit_amount: quote.deposit_amount || '',
       payment_cycle: 'monthly',
       payment_day: 5
@@ -397,9 +403,10 @@ export default function Quotes() {
       customer_email: '',
       company_name: '',
       contract_type: 'virtual_office',
-      plan_name: '',
+      plan_name: '營業登記方案',
       contract_months: 12,
-      items: [{ name: '商登月租費', quantity: 12, unit_price: 5000, amount: 60000 }],
+      original_price: 3000, // 營業登記原價
+      items: [{ name: '商登月租費', quantity: 12, unit_price: 1490, amount: 17880 }],
       discount_amount: 0,
       discount_note: '',
       deposit_amount: 6000,
@@ -415,20 +422,18 @@ export default function Quotes() {
       addNotification({ type: 'error', message: '請選擇場館' })
       return
     }
-    if (!form.customer_name) {
-      addNotification({ type: 'error', message: '請輸入客戶姓名' })
-      return
-    }
+    // 姓名改為非必填
 
     createQuote.mutate({
       branch_id: parseInt(form.branch_id),
-      customer_name: form.customer_name,
+      customer_name: form.customer_name || null,
       customer_phone: form.customer_phone || null,
       customer_email: form.customer_email || null,
       company_name: form.company_name || null,
       contract_type: form.contract_type,
       plan_name: form.plan_name || null,
       contract_months: form.contract_months,
+      original_price: parseFloat(form.original_price) || null, // 原價
       items: form.items,
       discount_amount: parseFloat(form.discount_amount) || 0,
       discount_note: form.discount_note || null,
@@ -465,6 +470,7 @@ export default function Quotes() {
       plan_name: preset.plan_name,
       contract_months: preset.contract_months,
       deposit_amount: preset.deposit_amount,
+      original_price: preset.original_price || 0, // 原價（營業登記用）
       items: preset.items.map(item => ({ ...item })) // 深拷貝避免修改原始資料
     })
   }
@@ -892,7 +898,7 @@ export default function Quotes() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="quote-customer-name" className="label">
-                  姓名 <span className="text-red-500">*</span>
+                  姓名
                 </label>
                 <input
                   id="quote-customer-name"

@@ -62,6 +62,12 @@ const STAMP_IMAGES = {
   2: '/images/stamp-pivotfrontier.png'
 }
 
+// 印章尺寸（72 DPI，公分換算像素）
+const STAMP_SIZES = {
+  1: { width: 148, height: 90 },   // 大忠館：5.21cm × 3.16cm
+  2: { width: 165, height: 114 }   // 環瑞館：5.82cm × 4.03cm
+}
+
 export default function FlexSeatPDF({ data }) {
   const {
     branch_company_name = '',
@@ -82,6 +88,7 @@ export default function FlexSeatPDF({ data }) {
   } = data
 
   const stampImage = STAMP_IMAGES[branch_id] || STAMP_IMAGES[1]
+  const stampSize = STAMP_SIZES[branch_id] || STAMP_SIZES[1]
 
   const today = new Date()
   const rocYear = today.getFullYear() - 1911
@@ -183,9 +190,9 @@ export default function FlexSeatPDF({ data }) {
               <Text style={styles.signatureLine}>統一編號：{branch_tax_id}</Text>
             </View>
             {show_stamp ? (
-              <Image src={stampImage} />
+              <Image src={stampImage} style={{ width: stampSize.width, height: stampSize.height }} />
             ) : (
-              <View style={{ width: 120, height: 80 }} />
+              <View style={{ width: stampSize.width, height: stampSize.height }} />
             )}
           </View>
 
