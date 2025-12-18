@@ -161,11 +161,12 @@ export default function Payments() {
     setGenerating(true)
     setGenerateResult(null)
     try {
-      const response = await api.post('/api/db/rpc/generate_monthly_payments', {
+      const data = await api.post('/api/db/rpc/generate_monthly_payments', {
         target_period: generatePeriod
       })
       // PostgREST 函數會回傳陣列，取第一筆
-      const result = Array.isArray(response.data) ? response.data[0] : response.data
+      // 注意：axios interceptor 已經返回 response.data，所以 data 本身就是資料
+      const result = Array.isArray(data) ? data[0] : data
       setGenerateResult(result)
       // 重新整理列表
       refetchDue()
