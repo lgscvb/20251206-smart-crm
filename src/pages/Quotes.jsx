@@ -52,9 +52,71 @@ const STATUS_VARIANTS = {
 // 合約類型
 const CONTRACT_TYPES = {
   virtual_office: '營業登記',
-  coworking_fixed: '固定座位',
-  coworking_flexible: '彈性座位',
-  meeting_room: '會議室'
+  office: '辦公室',
+  hot_desk: '共享辦公位',
+  meeting_room: '會議室',
+  custom: '自訂'
+}
+
+// 服務類型預設值（簡化版，無階梯式定價）
+const SERVICE_PRESETS = {
+  virtual_office: {
+    label: '營業登記',
+    description: '商業登記地址服務',
+    plan_name: '營業登記方案',
+    contract_months: 12,
+    deposit_amount: 6000,
+    items: [
+      { name: '商登月租費', quantity: 12, unit_price: 1400, amount: 16800 }
+    ]
+  },
+  office: {
+    label: '辦公室',
+    description: '獨立辦公室租賃',
+    plan_name: '辦公室租賃',
+    contract_months: 12,
+    deposit_amount: 0, // 依辦公室定
+    items: [
+      { name: '辦公室月租', quantity: 1, unit_price: 0, amount: 0 }
+    ],
+    // 辦公室子選項（價格需手動調整）
+    subOptions: [
+      { label: 'A 室', price: 0 },
+      { label: 'B 室', price: 0 },
+      { label: 'C 室', price: 0 },
+      { label: 'D 室', price: 13500 }
+    ]
+  },
+  hot_desk: {
+    label: '共享辦公位',
+    description: 'Hot Desking 彈性座位',
+    plan_name: '共享辦公位方案',
+    contract_months: 1,
+    deposit_amount: 0,
+    items: [
+      { name: '共享辦公位月租', quantity: 1, unit_price: 3000, amount: 3000 }
+    ]
+  },
+  meeting_room: {
+    label: '會議室',
+    description: '會議室租用',
+    plan_name: '會議室租用',
+    contract_months: 1,
+    deposit_amount: 0,
+    items: [
+      { name: '會議室租用', quantity: 1, unit_price: 2000, amount: 2000 }
+    ]
+  },
+  custom: {
+    label: '自訂',
+    description: '自訂方案內容',
+    plan_name: '',
+    contract_months: 12,
+    deposit_amount: 0,
+    items: [
+      { name: '', quantity: 1, unit_price: 0, amount: 0 }
+    ]
+  }
 }
 
 export default function Quotes() {
@@ -382,6 +444,21 @@ export default function Quotes() {
     })
   }
 
+  // 套用服務類型預設值
+  const applyServicePreset = (serviceType) => {
+    const preset = SERVICE_PRESETS[serviceType]
+    if (!preset) return
+
+    setForm({
+      ...form,
+      contract_type: serviceType,
+      plan_name: preset.plan_name,
+      contract_months: preset.contract_months,
+      deposit_amount: preset.deposit_amount,
+      items: preset.items.map(item => ({ ...item })) // 深拷貝避免修改原始資料
+    })
+  }
+
   // 移除項目
   const removeItem = (index) => {
     const newItems = form.items.filter((_, i) => i !== index)
@@ -690,36 +767,43 @@ export default function Quotes() {
         }
       >
         <div className="space-y-6">
-          {/* 基本資訊 */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="quote-branch" className="label">
-                場館 <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="quote-branch"
-                value={form.branch_id}
-                onChange={(e) => setForm({ ...form, branch_id: e.target.value })}
-                className="input"
-              >
-                <option value="">選擇場館</option>
-                {branches?.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="quote-contract-type" className="label">合約類型</label>
-              <select
-                id="quote-contract-type"
-                value={form.contract_type}
-                onChange={(e) => setForm({ ...form, contract_type: e.target.value })}
-                className="input"
-              >
-                {Object.entries(CONTRACT_TYPES).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
+          {/* 場館選擇 */}
+          <div>
+            <label htmlFor="quote-branch" className="label">
+              場館 <span className="text-red-500">*</span>
+            </label>
+            <select
+              id="quote-branch"
+              value={form.branch_id}
+              onChange={(e) => setForm({ ...form, branch_id: e.target.value })}
+              className="input"
+            >
+              <option value="">選擇場館</option>
+              {branches?.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 服務類型快速選擇 */}
+          <div>
+            <label className="label">服務類型（點擊自動帶入預設值）</label>
+            <div className="grid grid-cols-5 gap-2">
+              {Object.entries(SERVICE_PRESETS).map(([key, preset]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => applyServicePreset(key)}
+                  className={`p-3 rounded-lg border-2 transition-all text-center ${
+                    form.contract_type === key
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="font-medium text-sm">{preset.label}</div>
+                  <div className="text-xs text-gray-500 mt-1 line-clamp-1">{preset.description}</div>
+                </button>
+              ))}
             </div>
           </div>
 
