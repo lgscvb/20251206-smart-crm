@@ -58,6 +58,15 @@ const CONTRACT_TYPES = {
   custom: '自訂'
 }
 
+// 營業登記方案選項
+const VIRTUAL_OFFICE_OPTIONS = {
+  prices: [1490, 1690, 1800, 2000],
+  cycles: [
+    { label: '年繳', months: 12 },
+    { label: '半年繳', months: 6 }
+  ]
+}
+
 // 服務類型預設值（簡化版，無階梯式定價）
 const SERVICE_PRESETS = {
   virtual_office: {
@@ -66,8 +75,9 @@ const SERVICE_PRESETS = {
     plan_name: '營業登記方案',
     contract_months: 12,
     deposit_amount: 6000,
+    hasSubOptions: true, // 標記有子選項
     items: [
-      { name: '商登月租費', quantity: 12, unit_price: 1400, amount: 16800 }
+      { name: '商登月租費', quantity: 12, unit_price: 1490, amount: 17880 }
     ]
   },
   office: {
@@ -806,6 +816,75 @@ export default function Quotes() {
               ))}
             </div>
           </div>
+
+          {/* 營業登記子選項：月租金額 + 繳費週期 */}
+          {form.contract_type === 'virtual_office' && (
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="grid grid-cols-2 gap-4">
+                {/* 月租金額選擇 */}
+                <div>
+                  <label className="label text-blue-900">月租金額</label>
+                  <div className="flex flex-wrap gap-2">
+                    {VIRTUAL_OFFICE_OPTIONS.prices.map((price) => (
+                      <button
+                        key={price}
+                        type="button"
+                        onClick={() => {
+                          const newItems = [...form.items]
+                          if (newItems[0]) {
+                            newItems[0].unit_price = price
+                            newItems[0].amount = price * newItems[0].quantity
+                          }
+                          setForm({ ...form, items: newItems })
+                        }}
+                        className={`px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                          form.items[0]?.unit_price === price
+                            ? 'border-blue-500 bg-blue-100 text-blue-700'
+                            : 'border-gray-300 hover:border-blue-300 hover:bg-blue-50'
+                        }`}
+                      >
+                        ${price.toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* 繳費週期選擇 */}
+                <div>
+                  <label className="label text-blue-900">繳費週期</label>
+                  <div className="flex gap-2">
+                    {VIRTUAL_OFFICE_OPTIONS.cycles.map((cycle) => (
+                      <button
+                        key={cycle.months}
+                        type="button"
+                        onClick={() => {
+                          const newItems = [...form.items]
+                          if (newItems[0]) {
+                            newItems[0].quantity = cycle.months
+                            newItems[0].amount = newItems[0].unit_price * cycle.months
+                          }
+                          setForm({ ...form, contract_months: cycle.months, items: newItems })
+                        }}
+                        className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
+                          form.contract_months === cycle.months
+                            ? 'border-blue-500 bg-blue-100 text-blue-700'
+                            : 'border-gray-300 hover:border-blue-300 hover:bg-blue-50'
+                        }`}
+                      >
+                        {cycle.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {/* 即時計算預覽 */}
+              <div className="mt-3 pt-3 border-t border-blue-200 text-sm text-blue-800">
+                <span className="font-medium">
+                  ${form.items[0]?.unit_price?.toLocaleString() || 0}/月 × {form.contract_months} 個月 =
+                  <span className="text-lg ml-1">${(form.items[0]?.amount || 0).toLocaleString()}</span>
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* 客戶資訊 */}
           <div className="p-4 bg-gray-50 rounded-lg">
