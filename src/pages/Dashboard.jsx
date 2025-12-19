@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useBranchRevenue, useTodayTasks, useOverdueDetails, useRenewalReminders } from '../hooks/useApi'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -13,8 +14,11 @@ import {
   DollarSign,
   CheckCircle,
   Clock,
-  Zap
+  Zap,
+  Send,
+  Loader2
 } from 'lucide-react'
+import { line } from '../services/api'
 import StatCard from '../components/StatCard'
 import Badge, { StatusBadge } from '../components/Badge'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -57,8 +61,37 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { data: branchRevenue, isLoading: revenueLoading } = useBranchRevenue()
   const { data: todayTasks, isLoading: tasksLoading } = useTodayTasks()
-  const { data: overdue, isLoading: overdueLoading } = useOverdueDetails()
+  const { data: overdue, isLoading: overdueLoading, refetch: refetchOverdue } = useOverdueDetails()
   const { data: renewals } = useRenewalReminders()
+
+  // 催繳狀態
+  const [sendingReminder, setSendingReminder] = useState({})
+  const [reminderResult, setReminderResult] = useState({})
+
+  // 發送催繳
+  const handleSendReminder = async (item) => {
+    const key = `${item.customer_id}-${item.payment_period}`
+    setSendingReminder(prev => ({ ...prev, [key]: true }))
+    setReminderResult(prev => ({ ...prev, [key]: null }))
+
+    try {
+      await line.sendPaymentReminder(
+        item.customer_id,
+        item.total_due || item.amount,
+        item.due_date
+      )
+      setReminderResult(prev => ({ ...prev, [key]: 'success' }))
+      // 3秒後清除成功狀態
+      setTimeout(() => {
+        setReminderResult(prev => ({ ...prev, [key]: null }))
+      }, 3000)
+    } catch (error) {
+      console.error('催繳失敗:', error)
+      setReminderResult(prev => ({ ...prev, [key]: 'error' }))
+    } finally {
+      setSendingReminder(prev => ({ ...prev, [key]: false }))
+    }
+  }
 
   // 計算統計（金額與筆數）
   const branchRevenueArr = Array.isArray(branchRevenue) ? branchRevenue : []
@@ -347,29 +380,59 @@ export default function Dashboard() {
                 ✅ 沒有逾期款項
               </div>
             ) : (
-              overdue?.slice(0, 6).map((item, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {item.customer_name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {item.branch_name} · {item.payment_period}
-                    </p>
+              overdue?.slice(0, 6).map((item, i) => {
+                const key = `${item.customer_id}-${item.payment_period}`
+                const isSending = sendingReminder[key]
+                const result = reminderResult[key]
+
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {item.customer_name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {item.branch_name} · {item.payment_period}
+                      </p>
+                    </div>
+                    <div className="text-right mr-3">
+                      <p className="text-sm font-semibold text-red-600">
+                        ${(item.total_due || 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-red-500">
+                        逾期 {item.days_overdue} 天
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleSendReminder(item)
+                      }}
+                      disabled={isSending}
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        result === 'success'
+                          ? 'bg-green-100 text-green-700'
+                          : result === 'error'
+                          ? 'bg-red-200 text-red-700'
+                          : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                      }`}
+                      title="發送 LINE 催繳通知"
+                    >
+                      {isSending ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : result === 'success' ? (
+                        <CheckCircle className="w-3 h-3" />
+                      ) : (
+                        <Send className="w-3 h-3" />
+                      )}
+                      {isSending ? '發送中' : result === 'success' ? '已發送' : result === 'error' ? '失敗' : '催繳'}
+                    </button>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-red-600">
-                      ${(item.total_due || 0).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-red-500">
-                      逾期 {item.days_overdue} 天
-                    </p>
-                  </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>

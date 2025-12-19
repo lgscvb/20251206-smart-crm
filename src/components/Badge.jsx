@@ -52,6 +52,7 @@ export const statusConfig = {
   // 繳費狀態
   paid: { label: '已繳', variant: 'success' },
   overdue: { label: '逾期', variant: 'danger' },
+  waived: { label: '免收', variant: 'purple' },
 
   // 佣金狀態
   eligible: { label: '可付款', variant: 'success' },

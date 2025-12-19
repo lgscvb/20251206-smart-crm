@@ -19,7 +19,9 @@ import {
   History,
   Scale,
   Plus,
-  Loader2
+  Loader2,
+  Trash2,
+  Gift
 } from 'lucide-react'
 import api from '../services/api'
 
@@ -69,6 +71,17 @@ export default function Payments() {
   const [reminderMessage, setReminderMessage] = useState('')
   const [pageSize, setPageSize] = useState(15)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
+
+  // 刪除相關狀態
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletingPayment, setDeletingPayment] = useState(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
+  // 免收相關狀態
+  const [showWaiveModal, setShowWaiveModal] = useState(false)
+  const [waivingPayment, setWaivingPayment] = useState(null)
+  const [waiveLoading, setWaiveLoading] = useState(false)
+  const [waiveNotes, setWaiveNotes] = useState('')
 
   // 生成待繳記錄相關狀態
   const [showGenerateModal, setShowGenerateModal] = useState(false)
@@ -154,6 +167,50 @@ export default function Payments() {
     setUndoReason('')
     refetchPaid()
     refetchDue()
+  }
+
+  // 刪除繳費記錄
+  const handleDeletePayment = async () => {
+    if (!deletingPayment) return
+    setDeleteLoading(true)
+    try {
+      await api.delete(`/api/db/payments?id=eq.${deletingPayment.id}`)
+      setShowDeleteModal(false)
+      setDeletingPayment(null)
+      // 重新整理所有列表
+      refetchDue()
+      refetchOverdue()
+      refetchPaid()
+    } catch (error) {
+      console.error('刪除失敗:', error)
+      alert('刪除失敗：' + (error.response?.data?.message || error.message))
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  // 標記為免收
+  const handleWaivePayment = async () => {
+    if (!waivingPayment) return
+    setWaiveLoading(true)
+    try {
+      await api.patch(`/api/db/payments?id=eq.${waivingPayment.id}`, {
+        payment_status: 'waived',
+        notes: waiveNotes || '免收'
+      })
+      setShowWaiveModal(false)
+      setWaivingPayment(null)
+      setWaiveNotes('')
+      // 重新整理所有列表
+      refetchDue()
+      refetchOverdue()
+      refetchPaid()
+    } catch (error) {
+      console.error('免收標記失敗:', error)
+      alert('免收標記失敗：' + (error.response?.data?.message || error.message))
+    } finally {
+      setWaiveLoading(false)
+    }
   }
 
   // 生成待繳記錄
@@ -270,6 +327,28 @@ export default function Payments() {
               <Send className="w-4 h-4" />
             </button>
           )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setWaivingPayment(row)
+              setShowWaiveModal(true)
+            }}
+            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+            title="免收"
+          >
+            <Gift className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setDeletingPayment(row)
+              setShowDeleteModal(true)
+            }}
+            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            title="刪除"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       )
     }
@@ -397,6 +476,28 @@ export default function Payments() {
               <Send className="w-4 h-4" />
             </button>
           )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setWaivingPayment(row)
+              setShowWaiveModal(true)
+            }}
+            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+            title="免收"
+          >
+            <Gift className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setDeletingPayment(row)
+              setShowDeleteModal(true)
+            }}
+            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            title="刪除"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       )
     }
@@ -469,17 +570,30 @@ export default function Payments() {
       sortable: false,
       fixed: true,
       cell: (row) => (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setSelectedPayment(row)
-            setShowUndoModal(true)
-          }}
-          className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-          title="撤銷繳費"
-        >
-          <Undo2 className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setSelectedPayment(row)
+              setShowUndoModal(true)
+            }}
+            className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+            title="撤銷繳費"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setDeletingPayment(row)
+              setShowDeleteModal(true)
+            }}
+            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            title="刪除"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       )
     }
   ]
@@ -1052,6 +1166,151 @@ export default function Payments() {
             </div>
           )}
         </div>
+      </Modal>
+
+      {/* 刪除確認 Modal */}
+      <Modal
+        open={showDeleteModal}
+        onClose={() => {
+          if (!deleteLoading) {
+            setShowDeleteModal(false)
+            setDeletingPayment(null)
+          }
+        }}
+        title="確認刪除"
+        size="sm"
+        footer={
+          <>
+            <button
+              onClick={() => {
+                setShowDeleteModal(false)
+                setDeletingPayment(null)
+              }}
+              disabled={deleteLoading}
+              className="btn-secondary"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleDeletePayment}
+              disabled={deleteLoading}
+              className="btn-danger"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              {deleteLoading ? '刪除中...' : '確認刪除'}
+            </button>
+          </>
+        }
+      >
+        {deletingPayment && (
+          <div className="space-y-4">
+            <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-red-700">警告：此操作無法復原</p>
+                  <p className="text-sm text-red-600 mt-1">
+                    刪除後資料將永久消失，請確認是否要刪除此繳費記錄。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="font-medium">
+                {deletingPayment.customer_name || deletingPayment.customer?.name || '未知客戶'}
+              </p>
+              <p className="text-sm text-gray-500">
+                {deletingPayment.payment_period} · {deletingPayment.branch_name || deletingPayment.branch?.name || '-'}
+              </p>
+              <p className="text-xl font-bold text-gray-700 mt-2">
+                ${(deletingPayment.total_due || deletingPayment.amount || 0).toLocaleString()}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                狀態：{deletingPayment.payment_status === 'paid' ? '已付款' :
+                      deletingPayment.payment_status === 'overdue' ? '逾期' : '待繳'}
+              </p>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 免收確認 Modal */}
+      <Modal
+        open={showWaiveModal}
+        onClose={() => {
+          if (!waiveLoading) {
+            setShowWaiveModal(false)
+            setWaivingPayment(null)
+            setWaiveNotes('')
+          }
+        }}
+        title="標記為免收"
+        size="sm"
+        footer={
+          <>
+            <button
+              onClick={() => {
+                setShowWaiveModal(false)
+                setWaivingPayment(null)
+                setWaiveNotes('')
+              }}
+              disabled={waiveLoading}
+              className="btn-secondary"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleWaivePayment}
+              disabled={waiveLoading}
+              className="btn-primary bg-purple-600 hover:bg-purple-700"
+            >
+              <Gift className="w-4 h-4 mr-2" />
+              {waiveLoading ? '處理中...' : '確認免收'}
+            </button>
+          </>
+        }
+      >
+        {waivingPayment && (
+          <div className="space-y-4">
+            <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+              <div className="flex items-start gap-3">
+                <Gift className="w-6 h-6 text-purple-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-purple-700">此筆繳費將標記為免收</p>
+                  <p className="text-sm text-purple-600 mt-1">
+                    免收記錄不計入營收統計，但會保留歷史記錄。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="font-medium">
+                {waivingPayment.customer_name || waivingPayment.customer?.name || '未知客戶'}
+              </p>
+              <p className="text-sm text-gray-500">
+                {waivingPayment.payment_period} · {waivingPayment.branch_name || waivingPayment.branch?.name || '-'}
+              </p>
+              <p className="text-xl font-bold text-gray-700 mt-2">
+                ${(waivingPayment.total_due || waivingPayment.amount || 0).toLocaleString()}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                備註（可選）
+              </label>
+              <input
+                type="text"
+                value={waiveNotes}
+                onChange={(e) => setWaiveNotes(e.target.value)}
+                placeholder="例：10月免收、減免優惠"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              />
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )
