@@ -547,7 +547,7 @@ export default function Contracts() {
     // 預設排除已到期和已取消的合約
     status: statusFilter ? `eq.${statusFilter}` : 'in.(active,pending)',
     customer_id: customerIdFilter ? `eq.${customerIdFilter}` : undefined,
-    limit: 100
+    limit: 99999
   })
 
   // 所有欄位定義
