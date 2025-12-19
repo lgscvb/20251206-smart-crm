@@ -185,7 +185,9 @@ export default function Reports() {
     const customersArr = Array.isArray(customers) ? customers : []
     if (customersArr.length === 0) return []
     const types = customersArr.reduce((acc, c) => {
-      const type = c.customer_type === 'corporate' ? '公司戶' : '個人戶'
+      let type = '個人戶'
+      if (c.customer_type === 'company') type = '公司戶'
+      else if (c.customer_type === 'sole_proprietorship') type = '行號'
       acc[type] = (acc[type] || 0) + 1
       return acc
     }, {})
@@ -931,13 +933,13 @@ export default function Reports() {
             <div className="card">
               <p className="text-sm text-gray-500">公司戶</p>
               <p className="text-3xl font-bold text-purple-600 mt-1">
-                {customers?.filter(c => c.customer_type === 'corporate').length || 0}
+                {customers?.filter(c => c.customer_type === 'company' || c.customer_type === 'sole_proprietorship').length || 0}
               </p>
             </div>
             <div className="card">
               <p className="text-sm text-gray-500">個人戶</p>
               <p className="text-3xl font-bold text-cyan-600 mt-1">
-                {customers?.filter(c => c.customer_type !== 'corporate').length || 0}
+                {customers?.filter(c => c.customer_type === 'individual').length || 0}
               </p>
             </div>
           </div>
