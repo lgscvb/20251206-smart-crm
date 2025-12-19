@@ -561,48 +561,69 @@ export default function Bookings() {
             />
           </div>
 
-          {/* 時段選擇 */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                開始時間 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="time"
-                value={form.start_time}
-                onChange={(e) => handleFormChange('start_time', e.target.value)}
-                className="input w-full"
-                required
-                min="08:00"
-                max="18:00"
-              />
-              {/* 可用時段提示 */}
-              {checkingAvailability && (
-                <p className="text-sm text-gray-500 mt-1">載入可用時段...</p>
+          {/* 時段選擇 - 按鈕式 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              預約時段 <span className="text-red-500">*</span>
+              {form.start_time && form.end_time && (
+                <span className="ml-2 text-primary-600 font-normal">
+                  已選：{form.start_time} - {form.end_time}
+                </span>
               )}
-              {!checkingAvailability && availableSlots.length > 0 && (
-                <p className="text-sm text-gray-500 mt-1">
-                  可用時段：{availableSlots.map(s => s.start).join('、')}
-                </p>
+              {form.start_time && !form.end_time && (
+                <span className="ml-2 text-gray-500 font-normal">
+                  開始：{form.start_time}，請選擇結束時間
+                </span>
               )}
-              {!checkingAvailability && form.room_id && form.date && availableSlots.length === 0 && (
-                <p className="text-sm text-orange-500 mt-1">當日無可用時段，請手動輸入或選擇其他日期</p>
-              )}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {generateTimeSlots('09:00', '18:00').map(time => {
+                const isStart = form.start_time === time
+                const isEnd = form.end_time === time
+                const isInRange = form.start_time && form.end_time &&
+                  time > form.start_time && time < form.end_time
+                const isDisabled = form.start_time && !form.end_time && time <= form.start_time
+
+                return (
+                  <button
+                    key={time}
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={() => {
+                      if (!form.start_time) {
+                        // 選擇開始時間
+                        handleFormChange('start_time', time)
+                      } else if (!form.end_time) {
+                        // 選擇結束時間
+                        handleFormChange('end_time', time)
+                      } else {
+                        // 重新選擇（清除並設為新開始時間）
+                        setForm(prev => ({ ...prev, start_time: time, end_time: '' }))
+                      }
+                    }}
+                    className={`
+                      px-3 py-1.5 rounded-md text-sm font-medium transition-colors
+                      ${isStart ? 'bg-primary-600 text-white' : ''}
+                      ${isEnd ? 'bg-primary-600 text-white' : ''}
+                      ${isInRange ? 'bg-primary-100 text-primary-700' : ''}
+                      ${!isStart && !isEnd && !isInRange && !isDisabled ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : ''}
+                      ${isDisabled ? 'bg-gray-50 text-gray-300 cursor-not-allowed' : ''}
+                    `}
+                  >
+                    {time}
+                  </button>
+                )
+              })}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                結束時間 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="time"
-                value={form.end_time}
-                onChange={(e) => handleFormChange('end_time', e.target.value)}
-                className="input w-full"
-                required
-                min={form.start_time || "08:00"}
-                max="18:00"
-              />
-            </div>
+            {form.start_time && form.end_time && (
+              <button
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, start_time: '', end_time: '' }))}
+                className="mt-2 text-sm text-gray-500 hover:text-gray-700"
+              >
+                清除選擇
+              </button>
+            )}
           </div>
 
           {/* 其他資訊 */}
@@ -768,3 +789,54 @@ export default function Bookings() {
   )
 }
 
+// 生成時間選項（30分鐘間隔）
+function generateTimeSlots(startTime, endTime) {
+  const slots = []
+  const [startHour, startMin] = startTime.split(':').map(Number)
+  const [endHour, endMin] = endTime.split(':').map(Number)
+
+  let hour = startHour
+  let min = startMin
+
+  while (hour < endHour || (hour === endHour && min <= endMin)) {
+    const timeStr = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`
+    slots.push(timeStr)
+
+    min += 30
+    if (min >= 60) {
+      hour += 1
+      min = 0
+    }
+  }
+
+  return slots
+}
+
+// 生成結束時間選項（從開始時間+30分鐘到18:00）
+function generateEndTimeSlots(startTime) {
+  if (!startTime) return []
+
+  const [startHour, startMin] = startTime.split(':').map(Number)
+  const slots = []
+
+  let hour = startHour
+  let min = startMin + 30
+
+  if (min >= 60) {
+    hour += 1
+    min = 0
+  }
+
+  while (hour < 18 || (hour === 18 && min === 0)) {
+    const timeStr = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`
+    slots.push(timeStr)
+
+    min += 30
+    if (min >= 60) {
+      hour += 1
+      min = 0
+    }
+  }
+
+  return slots
+}
