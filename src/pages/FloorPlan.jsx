@@ -422,7 +422,7 @@ export default function FloorPlan() {
           >
             {floorPlan?.image_url ? (
               <img
-                src={floorPlan.image_url}
+                src={`${floorPlan.image_url}?v=2`}
                 alt="Floor Plan"
                 className="block w-full h-full"
                 draggable={false}
