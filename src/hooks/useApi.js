@@ -630,13 +630,13 @@ export function useNotificationSettings() {
     queryKey: ['notification-settings'],
     queryFn: async () => {
       const data = await db.query('system_settings', {
-        'key': 'in.(auto_payment_reminder,auto_renewal_reminder,reminder_time,overdue_reminder_days)'
+        'setting_key': 'in.(auto_payment_reminder,auto_renewal_reminder,reminder_time,overdue_reminder_days)'
       })
       const settings = {}
       const items = Array.isArray(data) ? data : []
       items.forEach(item => {
-        const key = item.key
-        let value = item.value
+        const key = item.setting_key
+        let value = item.setting_value
         if (value === 'true') value = true
         else if (value === 'false') value = false
         settings[key] = value
@@ -653,8 +653,8 @@ export function useUpdateNotificationSetting() {
 
   return useMutation({
     mutationFn: async ({ key, value }) => {
-      const response = await db.patch('system_settings', { value: String(value) }, {
-        key: `eq.${key}`
+      const response = await db.patch('system_settings', { setting_value: String(value) }, {
+        setting_key: `eq.${key}`
       })
       return response
     },
