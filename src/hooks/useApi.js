@@ -270,8 +270,9 @@ export function useTodayTasks() {
         paymentsArr.slice(0, 5).forEach((p) => {
           tasks.push({
             task_type: 'payment_due',
-            task_description: `${p.customer_name} - ${p.payment_period} 租金待繳`,
+            task_description: `${p.customer_name} - ${p.payment_period} 當期待繳`,
             amount: p.amount,
+            amountLabel: '當期',
             customer_name: p.customer_name,
             branch_name: p.branch_name,
             priority: p.urgency === 'upcoming' ? 'high' : 'medium'
@@ -279,10 +280,16 @@ export function useTodayTasks() {
         })
 
         renewalsArr.filter((r) => r.days_remaining <= 30).slice(0, 5).forEach((r) => {
+          const daysText = r.days_remaining < 0
+            ? `已逾期 ${Math.abs(r.days_remaining)} 天`
+            : r.days_remaining === 0
+            ? '今日到期'
+            : `${r.days_remaining} 天後到期`
           tasks.push({
             task_type: 'contract_expiring',
-            task_description: `${r.customer_name} 合約 ${r.days_remaining} 天後到期`,
+            task_description: `${r.customer_name} 合約${daysText}`,
             amount: r.monthly_rent,
+            amountLabel: '月租',
             customer_name: r.customer_name,
             branch_name: r.branch_name,
             priority: r.days_remaining <= 7 ? 'urgent' : 'high'

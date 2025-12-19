@@ -348,9 +348,14 @@ export default function Dashboard() {
                     </div>
                   </div>
                   {task.amount && (
-                    <span className="text-sm font-semibold text-gray-700">
-                      ${task.amount.toLocaleString()}
-                    </span>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold text-gray-700">
+                        ${task.amount.toLocaleString()}
+                      </span>
+                      {task.amountLabel && (
+                        <p className="text-xs text-gray-400">{task.amountLabel}</p>
+                      )}
+                    </div>
                   )}
                 </div>
               ))
