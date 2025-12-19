@@ -599,31 +599,30 @@ export default function Quotes() {
             )}
           </button>
           {row.status === 'draft' && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  updateStatus.mutate({ quoteId: row.id, status: 'sent' })
-                }}
-                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
-                title="標記為已發送"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (confirm('確定要刪除此報價單？')) {
-                    deleteQuote.mutate(row.id)
-                  }
-                }}
-                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
-                title="刪除"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                updateStatus.mutate({ quoteId: row.id, status: 'sent' })
+              }}
+              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
+              title="標記為已發送"
+            >
+              <Send className="w-4 h-4" />
+            </button>
           )}
+          {/* 所有狀態都可以刪除 */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              if (confirm('確定要刪除此報價單？')) {
+                deleteQuote.mutate(row.id)
+              }
+            }}
+            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
+            title="刪除"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
           {row.status === 'sent' && (
             <button
               onClick={(e) => {

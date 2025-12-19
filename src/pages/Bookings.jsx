@@ -162,10 +162,11 @@ export default function Bookings() {
     if (!roomId || !date) return
     setCheckingAvailability(true)
     try {
-      const result = await callTool('booking_check_availability', {
+      const response = await callTool('booking_check_availability', {
         room_id: parseInt(roomId),
         date_str: date
       })
+      const result = response?.result || response
       if (result.success) {
         setAvailableSlots(result.available_slots || [])
       } else {
@@ -566,43 +567,41 @@ export default function Bookings() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 開始時間 <span className="text-red-500">*</span>
               </label>
-              <select
+              <input
+                type="time"
                 value={form.start_time}
                 onChange={(e) => handleFormChange('start_time', e.target.value)}
                 className="input w-full"
                 required
-                disabled={!form.room_id || !form.date}
-              >
-                <option value="">請選擇</option>
-                {checkingAvailability ? (
-                  <option disabled>載入中...</option>
-                ) : availableSlots.length > 0 ? (
-                  availableSlots.map(slot => (
-                    <option key={slot.start} value={slot.start}>
-                      {slot.start}
-                    </option>
-                  ))
-                ) : form.room_id && form.date ? (
-                  <option disabled>無可用時段</option>
-                ) : null}
-              </select>
+                min="08:00"
+                max="18:00"
+              />
+              {/* 可用時段提示 */}
+              {checkingAvailability && (
+                <p className="text-sm text-gray-500 mt-1">載入可用時段...</p>
+              )}
+              {!checkingAvailability && availableSlots.length > 0 && (
+                <p className="text-sm text-gray-500 mt-1">
+                  可用時段：{availableSlots.map(s => s.start).join('、')}
+                </p>
+              )}
+              {!checkingAvailability && form.room_id && form.date && availableSlots.length === 0 && (
+                <p className="text-sm text-orange-500 mt-1">當日無可用時段，請手動輸入或選擇其他日期</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 結束時間 <span className="text-red-500">*</span>
               </label>
-              <select
+              <input
+                type="time"
                 value={form.end_time}
                 onChange={(e) => handleFormChange('end_time', e.target.value)}
                 className="input w-full"
                 required
-                disabled={!form.start_time}
-              >
-                <option value="">請選擇</option>
-                {form.start_time && generateEndTimes(form.start_time).map(time => (
-                  <option key={time} value={time}>{time}</option>
-                ))}
-              </select>
+                min={form.start_time || "08:00"}
+                max="18:00"
+              />
             </div>
           </div>
 
@@ -769,28 +768,3 @@ export default function Bookings() {
   )
 }
 
-// 生成結束時間選項（從開始時間到 18:00，每 30 分鐘一個）
-function generateEndTimes(startTime) {
-  if (!startTime) return []
-
-  const [startHour, startMin] = startTime.split(':').map(Number)
-  const times = []
-
-  let hour = startHour
-  let min = startMin + 30
-
-  while (hour < 18 || (hour === 18 && min === 0)) {
-    if (min >= 60) {
-      hour += 1
-      min -= 60
-    }
-    if (hour > 18) break
-
-    const timeStr = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`
-    times.push(timeStr)
-
-    min += 30
-  }
-
-  return times
-}

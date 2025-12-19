@@ -97,13 +97,15 @@ const CYCLE_MULTIPLIER = {
   monthly: 1,
   quarterly: 3,
   semi_annual: 6,
-  annual: 12
+  annual: 12,
+  biennial: 24
 }
 const CYCLE_LABEL = {
   monthly: '月繳',
   quarterly: '季繳',
   semi_annual: '半年繳',
-  annual: '年繳'
+  annual: '年繳',
+  biennial: '兩年繳'
 }
 
 // 計算當期金額（支援階梯式收費）
@@ -268,6 +270,7 @@ export default function Renewals() {
   const [pageSize, setPageSize] = useState(15)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const [reminderText, setReminderText] = useState('')
+  const [renewalNotes, setRenewalNotes] = useState('')
   const queryClient = useQueryClient()
 
   // 初始化欄位顯示狀態
@@ -320,6 +323,16 @@ export default function Renewals() {
       })
       setShowReminderModal(false)
       setSelectedContract(null)
+    }
+  })
+
+  // 更新備註
+  const updateNotes = useMutation({
+    mutationFn: async ({ contractId, notes }) => {
+      return crm.updateRenewalNotes(contractId, notes)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['renewal-reminders'] })
     }
   })
 
@@ -442,6 +455,7 @@ export default function Renewals() {
               onClick={(e) => {
                 e.stopPropagation()
                 setSelectedContract(row)
+                setRenewalNotes(row.renewal_notes || '')
                 setShowChecklistModal(true)
               }}
             />
@@ -528,6 +542,7 @@ export default function Renewals() {
             onClick={(e) => {
               e.stopPropagation()
               setSelectedContract(row)
+              setRenewalNotes(row.renewal_notes || '')
               setShowChecklistModal(true)
             }}
             className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
@@ -761,6 +776,7 @@ export default function Renewals() {
                         stage={status.stage}
                         onClick={() => {
                           setSelectedContract(item)
+                          setRenewalNotes(item.renewal_notes || '')
                           setShowChecklistModal(true)
                         }}
                       />
@@ -913,6 +929,7 @@ export default function Renewals() {
         onClose={() => {
           setShowChecklistModal(false)
           setSelectedContract(null)
+          setRenewalNotes('')
         }}
         title="續約進度管理"
         size="md"
@@ -953,12 +970,34 @@ export default function Renewals() {
             />
 
             {/* 備註 */}
-            {selectedContract.renewal_notes && (
-              <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                <p className="text-sm font-medium text-yellow-800 mb-1">備註</p>
-                <p className="text-sm text-yellow-700">{selectedContract.renewal_notes}</p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">備註</label>
+              <textarea
+                value={renewalNotes}
+                onChange={(e) => setRenewalNotes(e.target.value)}
+                placeholder="輸入備註..."
+                className="input w-full h-20 resize-none"
+              />
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={() => {
+                    updateNotes.mutate({
+                      contractId: selectedContract.id,
+                      notes: renewalNotes
+                    })
+                  }}
+                  disabled={updateNotes.isPending || renewalNotes === (selectedContract.renewal_notes || '')}
+                  className="btn-secondary text-sm"
+                >
+                  {updateNotes.isPending ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                      儲存中...
+                    </>
+                  ) : '儲存備註'}
+                </button>
               </div>
-            )}
+            </div>
 
             {/* 時間軸 */}
             {(selectedContract.renewal_notified_at ||

@@ -38,14 +38,15 @@ export default function Badge({ children, variant = 'gray', dot = false, classNa
 
 // 狀態映射
 export const statusConfig = {
-  // 客戶狀態
-  active: { label: '活躍', variant: 'success', dot: true },
+  // 通用狀態（合約用「生效中」，客戶用「活躍」由各頁面自行覆蓋）
+  active: { label: '生效中', variant: 'success', dot: true },
   inactive: { label: '非活躍', variant: 'gray', dot: true },
   lead: { label: '潛在客戶', variant: 'info', dot: true },
   churned: { label: '流失', variant: 'danger', dot: true },
 
   // 合約狀態
-  pending: { label: '待生效', variant: 'warning' },
+  pending: { label: '待繳', variant: 'warning' },  // 繳費用「待繳」
+  pending_sign: { label: '待簽約', variant: 'info' },  // 合約用「待簽約」
   expired: { label: '已到期', variant: 'gray' },
   cancelled: { label: '已取消', variant: 'danger' },
 

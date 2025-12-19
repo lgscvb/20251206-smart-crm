@@ -6,7 +6,6 @@ import { crm, callTool } from '../services/api'
 import useStore from '../store/useStore'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
-import Badge, { StatusBadge } from '../components/Badge'
 import { pdf } from '@react-pdf/renderer'
 import ContractPDF from '../components/pdf/ContractPDF'
 import OfficePDF from '../components/pdf/OfficePDF'
@@ -607,10 +606,20 @@ export default function Contracts() {
       }
     },
     {
-      key: 'plan_name',
-      header: '方案',
-      accessor: 'plan_name',
-      cell: (row) => row.plan_name || '-'
+      key: 'duration',
+      header: '年限',
+      accessor: 'start_date',
+      cell: (row) => {
+        if (!row.start_date || !row.end_date) return '-'
+        const start = new Date(row.start_date)
+        const end = new Date(row.end_date)
+        const months = Math.round((end - start) / (1000 * 60 * 60 * 24 * 30))
+        if (months >= 12) {
+          const years = Math.round(months / 12)
+          return <span className="text-sm">{years} 年</span>
+        }
+        return <span className="text-sm">{months} 月</span>
+      }
     },
     {
       key: 'start_date',
@@ -648,13 +657,15 @@ export default function Contracts() {
           monthly: 1,
           quarterly: 3,
           semi_annual: 6,
-          annual: 12
+          annual: 12,
+          biennial: 24
         }
         const cycleLabel = {
           monthly: '月繳',
           quarterly: '季繳',
           semi_annual: '半年繳',
-          annual: '年繳'
+          annual: '年繳',
+          biennial: '兩年繳'
         }
         const multiplier = cycleMultiplier[row.payment_cycle] || 1
         const periodAmount = monthlyRent * multiplier
@@ -669,12 +680,6 @@ export default function Contracts() {
           </div>
         )
       }
-    },
-    {
-      key: 'status',
-      header: '狀態',
-      accessor: 'status',
-      cell: (row) => <StatusBadge status={row.status} />
     },
     {
       key: 'actions',
@@ -1146,6 +1151,7 @@ export default function Contracts() {
                   <option value="quarterly">季繳</option>
                   <option value="semi_annual">半年繳</option>
                   <option value="annual">年繳</option>
+                  <option value="biennial">兩年繳</option>
                 </select>
               </div>
               <div>
@@ -1662,6 +1668,7 @@ export default function Contracts() {
                   <option value="quarterly">季繳</option>
                   <option value="semi_annual">半年繳</option>
                   <option value="annual">年繳</option>
+                  <option value="biennial">兩年繳</option>
                 </select>
               </div>
               <div>
