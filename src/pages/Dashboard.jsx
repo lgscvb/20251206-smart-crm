@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useBranchRevenue, useTodayTasks, useOverdueDetails, useRenewalReminders } from '../hooks/useApi'
+import { useBranchRevenue, useTodayTasks, useOverdueDetails, useRenewalReminders, usePaymentsDue } from '../hooks/useApi'
 import { useNavigate } from 'react-router-dom'
 import {
   Users,
@@ -16,7 +16,10 @@ import {
   Clock,
   Zap,
   Send,
-  Loader2
+  Loader2,
+  MessageCircle,
+  History,
+  Power
 } from 'lucide-react'
 import { line } from '../services/api'
 import StatCard from '../components/StatCard'
@@ -63,10 +66,42 @@ export default function Dashboard() {
   const { data: todayTasks, isLoading: tasksLoading } = useTodayTasks()
   const { data: overdue, isLoading: overdueLoading, refetch: refetchOverdue } = useOverdueDetails()
   const { data: renewals } = useRenewalReminders()
+  const { data: paymentsDue } = usePaymentsDue()
 
   // 催繳狀態
   const [sendingReminder, setSendingReminder] = useState({})
   const [reminderResult, setReminderResult] = useState({})
+
+  // 自動通知開關
+  const [autoNotifyEnabled, setAutoNotifyEnabled] = useState(false)
+
+  // 模擬通知記錄（實際應該從後端 API 取得）
+  const [notificationHistory] = useState([
+    {
+      id: 1,
+      type: 'payment_reminder',
+      customer: '張小明',
+      message: '催繳通知已發送',
+      timestamp: '2024-12-19 10:30',
+      status: 'success'
+    },
+    {
+      id: 2,
+      type: 'renewal_reminder',
+      customer: '李大華',
+      message: '續約提醒已發送',
+      timestamp: '2024-12-19 09:15',
+      status: 'success'
+    },
+    {
+      id: 3,
+      type: 'payment_reminder',
+      customer: '王美玲',
+      message: '催繳通知發送失敗',
+      timestamp: '2024-12-19 08:45',
+      status: 'error'
+    }
+  ])
 
   // 發送催繳
   const handleSendReminder = async (item) => {
@@ -140,8 +175,39 @@ export default function Dashboard() {
     commission_due: '💼'
   }
 
+  // 當月應催繳列表（待繳 + 逾期）
+  const currentMonthDue = Array.isArray(paymentsDue) ? paymentsDue : []
+
+  // 45天內到期的合約
+  const upcomingRenewals = Array.isArray(renewals) ? renewals.filter(r => r.days_until_expiry <= 45) : []
+
   return (
     <div className="space-y-6">
+      {/* 自動通知開關 */}
+      <div className="card">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Power className={`w-5 h-5 ${autoNotifyEnabled ? 'text-green-500' : 'text-gray-400'}`} />
+            <div>
+              <h3 className="font-semibold text-gray-900">自動通知系統</h3>
+              <p className="text-sm text-gray-500">自動發送繳費提醒與續約通知</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAutoNotifyEnabled(!autoNotifyEnabled)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              autoNotifyEnabled ? 'bg-green-500' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                autoNotifyEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
       {/* 財務統計卡片 - 最重要 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -231,47 +297,8 @@ export default function Dashboard() {
         )
       })()}
 
-      {/* 圖表區 */}
+      {/* 圖表區與新增區塊 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 分館營收長條圖 */}
-        <div className="lg:col-span-2 card">
-          <div className="card-header">
-            <h3 className="card-title">分館營收比較</h3>
-            <button
-              onClick={() => navigate('/reports')}
-              className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
-            >
-              查看報表 <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="h-72">
-            {revenueLoading ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full" />
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} />
-                  <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px'
-                    }}
-                    formatter={(value) => `$${value.toLocaleString()}`}
-                  />
-                  <Bar dataKey="營收" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="待收" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="逾期" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
         {/* 收款狀態圓餅圖 */}
         <div className="card">
           <div className="card-header">
@@ -302,6 +329,195 @@ export default function Dashboard() {
                   <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
                 </PieChart>
               </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* 當月應催繳 */}
+        <div className="card lg:col-span-2">
+          <div className="card-header">
+            <h3 className="card-title flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-orange-500" />
+              當月應催繳
+            </h3>
+            <button
+              onClick={() => navigate('/payments')}
+              className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+            >
+              查看全部 <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {currentMonthDue?.length === 0 ? (
+              <div className="py-8 text-center text-gray-500">
+                ✅ 當月無待催繳款項
+              </div>
+            ) : (
+              currentMonthDue?.slice(0, 8).map((item, i) => {
+                const key = `${item.customer_id}-${item.payment_period || i}`
+                const isSending = sendingReminder[key]
+                const result = reminderResult[key]
+                const isOverdue = item.payment_status === 'overdue'
+
+                return (
+                  <div
+                    key={i}
+                    className={`flex items-center justify-between p-3 rounded-lg border ${
+                      isOverdue ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {item.customer_name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {item.branch_name} · {item.payment_period}
+                      </p>
+                    </div>
+                    <div className="text-right mr-3">
+                      <p className={`text-sm font-semibold ${isOverdue ? 'text-red-600' : 'text-amber-600'}`}>
+                        ${(item.amount || item.total_due || 0).toLocaleString()}
+                      </p>
+                      {isOverdue && item.days_overdue && (
+                        <p className="text-xs text-red-500">
+                          逾期 {item.days_overdue} 天
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleSendReminder(item)
+                      }}
+                      disabled={isSending}
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        result === 'success'
+                          ? 'bg-green-100 text-green-700'
+                          : result === 'error'
+                          ? 'bg-red-200 text-red-700'
+                          : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                      }`}
+                      title="發送 LINE 催繳通知"
+                    >
+                      {isSending ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : result === 'success' ? (
+                        <CheckCircle className="w-3 h-3" />
+                      ) : (
+                        <Send className="w-3 h-3" />
+                      )}
+                      {isSending ? '發送中' : result === 'success' ? '已發送' : result === 'error' ? '失敗' : '催繳'}
+                    </button>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 續約通知與通知記錄 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 續約通知 */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title flex items-center gap-2">
+              <Bell className="w-5 h-5 text-orange-500" />
+              續約通知（45天內到期）
+            </h3>
+            <button
+              onClick={() => navigate('/renewals')}
+              className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+            >
+              查看全部 <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {upcomingRenewals.length === 0 ? (
+              <div className="py-8 text-center text-gray-500">
+                ✅ 無即將到期的合約
+              </div>
+            ) : (
+              upcomingRenewals.slice(0, 8).map((renewal, i) => {
+                const isUrgent = renewal.days_until_expiry <= 7
+                const status = getDisplayStatus(renewal)
+
+                return (
+                  <div
+                    key={i}
+                    className={`flex items-center justify-between p-3 rounded-lg border ${
+                      isUrgent ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {renewal.customer_name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {renewal.branch_name} · {renewal.product_type || '虛擬辦公室'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <Badge variant={isUrgent ? 'danger' : 'warning'}>
+                        {renewal.days_until_expiry <= 0
+                          ? '已到期'
+                          : `${renewal.days_until_expiry} 天後到期`}
+                      </Badge>
+                      <p className="text-xs text-gray-500 mt-1">
+                        進度 {status.progress}/5
+                      </p>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+
+        {/* 通知記錄 */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title flex items-center gap-2">
+              <History className="w-5 h-5 text-blue-500" />
+              通知記錄
+            </h3>
+          </div>
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {notificationHistory.length === 0 ? (
+              <div className="py-8 text-center text-gray-500">
+                無通知記錄
+              </div>
+            ) : (
+              notificationHistory.map((record) => (
+                <div
+                  key={record.id}
+                  className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex-shrink-0">
+                    {record.status === 'success' ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : record.status === 'error' ? (
+                      <AlertTriangle className="w-5 h-5 text-red-500" />
+                    ) : (
+                      <MessageCircle className="w-5 h-5 text-blue-500" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">
+                      {record.customer}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {record.message}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {record.timestamp}
+                    </p>
+                  </div>
+                  <Badge variant={record.status === 'success' ? 'success' : 'danger'}>
+                    {record.type === 'payment_reminder' ? '催繳' : '續約'}
+                  </Badge>
+                </div>
+              ))
             )}
           </div>
         </div>
