@@ -609,3 +609,71 @@ export function useUpdateLegalStatus() {
     }
   })
 }
+
+// ============================================================================
+// 通知記錄 Hooks
+// ============================================================================
+
+export function useNotificationLogs(params = {}) {
+  return useQuery({
+    queryKey: ['notification-logs', params],
+    queryFn: async () => {
+      const queryParams = { order: 'created_at.desc', limit: 50, ...params }
+      const data = await db.query('v_notification_logs', queryParams)
+      return Array.isArray(data) ? data : []
+    }
+  })
+}
+
+export function useNotificationSettings() {
+  return useQuery({
+    queryKey: ['notification-settings'],
+    queryFn: async () => {
+      const data = await db.query('system_settings', {
+        'key': 'in.(auto_payment_reminder,auto_renewal_reminder,reminder_time,overdue_reminder_days)'
+      })
+      const settings = {}
+      const items = Array.isArray(data) ? data : []
+      items.forEach(item => {
+        const key = item.key
+        let value = item.value
+        if (value === 'true') value = true
+        else if (value === 'false') value = false
+        settings[key] = value
+      })
+      return settings
+    },
+    staleTime: 1000 * 60 * 5
+  })
+}
+
+export function useUpdateNotificationSetting() {
+  const queryClient = useQueryClient()
+  const addNotification = useStore((state) => state.addNotification)
+
+  return useMutation({
+    mutationFn: async ({ key, value }) => {
+      const response = await db.patch('system_settings', { value: String(value) }, {
+        key: `eq.${key}`
+      })
+      return response
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-settings'] })
+      addNotification({ type: 'success', message: '設定已更新' })
+    },
+    onError: (error) => {
+      addNotification({ type: 'error', message: `更新失敗: ${error.message}` })
+    }
+  })
+}
+
+export function useMonthlyRemindersSummary() {
+  return useQuery({
+    queryKey: ['monthly-reminders-summary'],
+    queryFn: async () => {
+      const data = await db.query('v_monthly_reminders_summary')
+      return Array.isArray(data) ? data : []
+    }
+  })
+}

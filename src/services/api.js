@@ -136,6 +136,15 @@ export const db = {
     return ensureArray(data)
   },
 
+  // 通用更新
+  async patch(table, data, params = {}) {
+    const response = await api.patch(`/api/db/${table}`, data, {
+      params,
+      headers: { 'Prefer': 'return=representation' }
+    })
+    return response
+  },
+
   // 客戶
   async getCustomers(params = {}) {
     const data = await api.get('/api/db/v_customer_summary', { params })
