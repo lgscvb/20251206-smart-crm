@@ -8,7 +8,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 15000,
+  timeout: 30000,  // 預設 30 秒（LINE 發送需要生成 PDF，較耗時）
   headers: {
     'Content-Type': 'application/json',
     'Cache-Control': 'no-cache, no-store, must-revalidate',

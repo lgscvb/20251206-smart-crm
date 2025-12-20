@@ -182,6 +182,7 @@ export default function QuoteCreate() {
   const createQuote = useMutation({
     mutationFn: (data) => callTool('quote_create', data),
     onSuccess: async (response) => {
+      console.log('quote_create response:', response)
       const data = response?.result || response
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['quotes'] })
@@ -194,10 +195,12 @@ export default function QuoteCreate() {
 
         navigate('/quotes')
       } else {
-        addNotification({ type: 'error', message: data.message || '建立失敗' })
+        console.error('quote_create failed:', data)
+        addNotification({ type: 'error', message: data.message || data.error || '建立失敗（請檢查 console）' })
       }
     },
     onError: (error) => {
+      console.error('quote_create error:', error)
       addNotification({ type: 'error', message: `建立失敗: ${error.message}` })
     }
   })
@@ -229,14 +232,20 @@ export default function QuoteCreate() {
       // 從 items 中移除該方案的項目
       const newItems = form.items.filter(item => item.plan_id !== plan.id)
 
-      // 重新計算押金
+      // 重新計算押金和合約月數
       const remainingPlans = servicePlans.filter(p => newPlanIds.includes(p.id))
       const totalDeposit = remainingPlans.reduce((sum, p) => sum + (parseFloat(p.deposit) || 0), 0)
+
+      // 重新計算合約月數（取剩餘方案中最長的，無方案時預設 12）
+      const maxContractMonths = remainingPlans.length > 0
+        ? Math.max(...remainingPlans.map(p => getContractMonths(p)))
+        : 12
 
       setForm({
         ...form,
         items: newItems,
         deposit_amount: totalDeposit,
+        contract_months: maxContractMonths,
         plan_name: remainingPlans.map(p => p.name).join(' + ') || ''
       })
     } else {
@@ -263,11 +272,8 @@ export default function QuoteCreate() {
       const allSelectedPlans = [...servicePlans.filter(p => selectedPlanIds.includes(p.id)), plan]
       const totalDeposit = allSelectedPlans.reduce((sum, p) => sum + (parseFloat(p.deposit) || 0), 0)
 
-      // 計算合約月數（取最長的）
-      const maxContractMonths = Math.max(
-        form.contract_months,
-        getContractMonths(plan)
-      )
+      // 計算合約月數（取所有選擇方案中最長的）
+      const maxContractMonths = Math.max(...allSelectedPlans.map(p => getContractMonths(p)))
 
       setForm({
         ...form,
@@ -289,15 +295,21 @@ export default function QuoteCreate() {
     if (itemToRemove?.plan_id) {
       setSelectedPlanIds(prev => prev.filter(id => id !== itemToRemove.plan_id))
 
-      // 重新計算押金
+      // 重新計算押金和合約月數
       const remainingPlanIds = selectedPlanIds.filter(id => id !== itemToRemove.plan_id)
       const remainingPlans = servicePlans.filter(p => remainingPlanIds.includes(p.id))
       const totalDeposit = remainingPlans.reduce((sum, p) => sum + (parseFloat(p.deposit) || 0), 0)
+
+      // 重新計算合約月數
+      const maxContractMonths = remainingPlans.length > 0
+        ? Math.max(...remainingPlans.map(p => getContractMonths(p)))
+        : 12
 
       setForm({
         ...form,
         items: newItems,
         deposit_amount: totalDeposit,
+        contract_months: maxContractMonths,
         plan_name: remainingPlans.map(p => p.name).join(' + ') || ''
       })
     } else {
@@ -325,7 +337,7 @@ export default function QuoteCreate() {
       return
     }
 
-    createQuote.mutate({
+    const requestData = {
       branch_id: parseInt(form.branch_id),
       customer_name: form.customer_name || null,
       customer_phone: form.customer_phone || null,
@@ -343,7 +355,9 @@ export default function QuoteCreate() {
       internal_notes: form.internal_notes || null,
       customer_notes: form.customer_notes || null,
       line_user_id: form.line_user_id || null  // LINE User ID（來自 Brain）
-    })
+    }
+    console.log('Submitting quote:', requestData)
+    createQuote.mutate(requestData)
   }
 
   // 取得分館名稱
