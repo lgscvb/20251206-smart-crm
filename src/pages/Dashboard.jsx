@@ -328,15 +328,15 @@ export default function Dashboard() {
                 ✅ 當月無待催繳款項
               </div>
             ) : (
-              currentMonthDue?.slice(0, 8).map((item, i) => {
-                const key = `${item.customer_id}-${item.payment_period || i}`
+              currentMonthDue?.slice(0, 8).map((item) => {
+                const key = `${item.customer_id}-${item.payment_period}`
                 const isSending = sendingReminder[key]
                 const result = reminderResult[key]
                 const isOverdue = item.payment_status === 'overdue'
 
                 return (
                   <div
-                    key={i}
+                    key={item.id || key}
                     className={`flex items-center justify-between p-3 rounded-lg border ${
                       isOverdue ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'
                     }`}
@@ -413,13 +413,13 @@ export default function Dashboard() {
                 ✅ 無即將到期的合約
               </div>
             ) : (
-              upcomingRenewals.slice(0, 8).map((renewal, i) => {
+              upcomingRenewals.slice(0, 8).map((renewal) => {
                 const isUrgent = renewal.days_until_expiry <= 7
                 const status = getDisplayStatus(renewal)
 
                 return (
                   <div
-                    key={i}
+                    key={renewal.contract_id || renewal.customer_id}
                     className={`flex items-center justify-between p-3 rounded-lg border ${
                       isUrgent ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'
                     }`}
@@ -517,9 +517,9 @@ export default function Dashboard() {
                 🎉 今日沒有待辦事項
               </div>
             ) : (
-              todayTasks?.slice(0, 8).map((task, i) => (
+              todayTasks?.slice(0, 8).map((task) => (
                 <div
-                  key={i}
+                  key={task.id || `${task.task_type}-${task.customer_id}`}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
                   onClick={() => {
                     if (task.task_type === 'payment_due') navigate('/payments')
@@ -576,14 +576,14 @@ export default function Dashboard() {
                 ✅ 沒有逾期款項
               </div>
             ) : (
-              overdue?.slice(0, 6).map((item, i) => {
+              overdue?.slice(0, 6).map((item) => {
                 const key = `${item.customer_id}-${item.payment_period}`
                 const isSending = sendingReminder[key]
                 const result = reminderResult[key]
 
                 return (
                   <div
-                    key={i}
+                    key={item.id || key}
                     className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100"
                   >
                     <div className="flex-1 min-w-0">
@@ -663,8 +663,8 @@ export default function Dashboard() {
                   </td>
                 </tr>
               ) : (
-                branchRevenueArr.map((branch, i) => (
-                  <tr key={i}>
+                branchRevenueArr.map((branch) => (
+                  <tr key={branch.branch_id || branch.branch_name}>
                     <td className="font-medium">{branch.branch_name}</td>
                     <td>{branch.active_customers || 0}</td>
                     <td>{branch.active_contracts || 0}</td>

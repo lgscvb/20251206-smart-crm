@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { callTool, db } from '../services/api'
 import DataTable from '../components/DataTable'
 import { StatusBadge } from '../components/Badge'
+import useStore from '../store/useStore'
 import {
   FileText,
   Plus,
@@ -26,6 +27,7 @@ const INVOICE_STATUS = {
 
 export default function Invoices() {
   const queryClient = useQueryClient()
+  const addNotification = useStore((state) => state.addNotification)
   const [activeTab, setActiveTab] = useState('list') // list, pending, stats
   const [branchFilter, setBranchFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -81,16 +83,16 @@ export default function Invoices() {
     onSuccess: (response) => {
       const result = response?.result || response
       if (result.success) {
-        alert(`發票開立成功！\n發票號碼：${result.invoice_number}`)
+        addNotification({ type: 'success', message: `發票開立成功！發票號碼：${result.invoice_number}` })
         queryClient.invalidateQueries(['invoices'])
         setShowCreateModal(false)
         setSelectedPayment(null)
       } else {
-        alert(`開立失敗：${result.message}`)
+        addNotification({ type: 'error', message: `開立失敗：${result.message}` })
       }
     },
     onError: (error) => {
-      alert(`開立失敗：${error.message}`)
+      addNotification({ type: 'error', message: `開立失敗：${error.message}` })
     }
   })
 
@@ -102,12 +104,12 @@ export default function Invoices() {
     onSuccess: (response) => {
       const result = response?.result || response
       if (result.success) {
-        alert(`發票 ${result.invoice_number} 已作廢`)
+        addNotification({ type: 'success', message: `發票 ${result.invoice_number} 已作廢` })
         queryClient.invalidateQueries(['invoices'])
         setShowVoidModal(false)
         setSelectedPayment(null)
       } else {
-        alert(`作廢失敗：${result.message}`)
+        addNotification({ type: 'error', message: `作廢失敗：${result.message}` })
       }
     }
   })
@@ -120,12 +122,12 @@ export default function Invoices() {
     onSuccess: (response) => {
       const result = response?.result || response
       if (result.success) {
-        alert(`折讓單開立成功！\n折讓單號：${result.allowance_number}`)
+        addNotification({ type: 'success', message: `折讓單開立成功！折讓單號：${result.allowance_number}` })
         queryClient.invalidateQueries(['invoices'])
         setShowAllowanceModal(false)
         setSelectedPayment(null)
       } else {
-        alert(`開立失敗：${result.message}`)
+        addNotification({ type: 'error', message: `開立失敗：${result.message}` })
       }
     }
   })
@@ -411,6 +413,7 @@ export default function Invoices() {
           }}
           onSubmit={(data) => voidInvoiceMutation.mutate(data)}
           isLoading={voidInvoiceMutation.isPending}
+          addNotification={addNotification}
         />
       )}
 
@@ -424,6 +427,7 @@ export default function Invoices() {
           }}
           onSubmit={(data) => allowanceMutation.mutate(data)}
           isLoading={allowanceMutation.isPending}
+          addNotification={addNotification}
         />
       )}
     </div>
@@ -546,15 +550,18 @@ function CreateInvoiceModal({ payment, onClose, onSubmit, isLoading }) {
 }
 
 // 作廢發票 Modal
-function VoidInvoiceModal({ payment, onClose, onSubmit, isLoading }) {
+function VoidInvoiceModal({ payment, onClose, onSubmit, isLoading, addNotification }) {
   const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!reason.trim()) {
-      alert('請輸入作廢原因')
+      setError('請輸入作廢原因')
+      addNotification?.({ type: 'error', message: '請輸入作廢原因' })
       return
     }
+    setError('')
     onSubmit({
       payment_id: payment.id,
       reason
@@ -614,24 +621,29 @@ function VoidInvoiceModal({ payment, onClose, onSubmit, isLoading }) {
 }
 
 // 折讓單 Modal
-function AllowanceModal({ payment, onClose, onSubmit, isLoading }) {
+function AllowanceModal({ payment, onClose, onSubmit, isLoading, addNotification }) {
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!amount || Number(amount) <= 0) {
-      alert('請輸入有效的折讓金額')
+      setError('請輸入有效的折讓金額')
+      addNotification?.({ type: 'error', message: '請輸入有效的折讓金額' })
       return
     }
     if (Number(amount) > payment.amount) {
-      alert('折讓金額不可大於發票金額')
+      setError('折讓金額不可大於發票金額')
+      addNotification?.({ type: 'error', message: '折讓金額不可大於發票金額' })
       return
     }
     if (!reason.trim()) {
-      alert('請輸入折讓原因')
+      setError('請輸入折讓原因')
+      addNotification?.({ type: 'error', message: '請輸入折讓原因' })
       return
     }
+    setError('')
     onSubmit({
       payment_id: payment.id,
       allowance_amount: Number(amount),
