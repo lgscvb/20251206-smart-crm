@@ -61,6 +61,7 @@ export default function Customers() {
       header: '#',
       accessor: '_index',
       fixed: true,
+      width: '40px',
       cell: (row, index) => (
         <span className="text-gray-500 font-mono text-sm">{index + 1}</span>
       )
@@ -70,11 +71,12 @@ export default function Customers() {
       header: '客戶',
       accessor: 'name',
       fixed: true,
+      width: '160px',
       cell: (row) => (
-        <div>
-          <p className="font-medium text-gray-900">{row.name}</p>
+        <div className="max-w-[140px]">
+          <p className="font-medium text-gray-900 truncate">{row.name}</p>
           {row.company_name && (
-            <p className="text-xs text-gray-500 truncate max-w-[150px]">{row.company_name}</p>
+            <p className="text-xs text-gray-500 truncate">{row.company_name}</p>
           )}
         </div>
       )
@@ -82,12 +84,14 @@ export default function Customers() {
     {
       key: 'branch_name',
       header: '分館',
-      accessor: 'branch_name'
+      accessor: 'branch_name',
+      width: '80px'
     },
     {
       key: 'active_contracts',
       header: '合約',
       accessor: 'active_contracts',
+      width: '60px',
       cell: (row) => (
         <span className="font-medium">
           {row.active_contracts || 0} 份
@@ -98,11 +102,13 @@ export default function Customers() {
       key: 'pending_amount',
       header: '待繳',
       accessor: 'pending_amount',
+      width: '100px',
+      className: 'text-right',
       cell: (row) => {
         const pending = row.pending_amount || 0
         const overdue = row.overdue_amount || 0
         return (
-          <div className="text-right">
+          <div>
             {pending > 0 && (
               <p className="text-sm text-gray-700">
                 ${pending.toLocaleString()}
@@ -124,6 +130,7 @@ export default function Customers() {
       key: 'line_user_id',
       header: 'LINE',
       accessor: 'line_user_id',
+      width: '80px',
       cell: (row) =>
         row.line_user_id ? (
           <Badge variant="success" dot>
@@ -137,18 +144,21 @@ export default function Customers() {
       key: 'risk_level',
       header: '風險',
       accessor: 'risk_level',
+      width: '70px',
       cell: (row) => <StatusBadge status={row.risk_level || 'normal'} />
     },
     {
       key: 'status',
       header: '狀態',
       accessor: 'status',
+      width: '70px',
       cell: (row) => <StatusBadge status={row.status} />
     },
     {
       key: 'phone',
       header: '電話',
       accessor: 'phone',
+      width: '110px',
       cell: (row) => (
         <div className="text-sm text-gray-600">
           {row.phone || <span className="text-gray-400">-</span>}
@@ -160,6 +170,7 @@ export default function Customers() {
       header: '',
       accessor: 'id',
       fixed: true,
+      width: '50px',
       cell: (row) => (
         <button
           onClick={(e) => {

@@ -146,7 +146,8 @@ export default function DataTable({
                   scope="col"
                   className={`px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider ${
                     col.sortable !== false ? 'cursor-pointer hover:bg-gray-100' : ''
-                  }`}
+                  } ${col.className || ''}`}
+                  style={col.width ? { width: col.width, minWidth: col.width } : undefined}
                   onClick={() => col.sortable !== false && col.accessor && handleSort(col.accessor)}
                 >
                   <div className="flex items-center gap-1">
@@ -197,7 +198,8 @@ export default function DataTable({
                   {columns.map((col) => (
                     <td
                       key={col.accessor || col.header}
-                      className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap"
+                      className={`px-4 py-3 text-sm text-gray-700 whitespace-nowrap ${col.className || ''}`}
+                      style={col.width ? { width: col.width, minWidth: col.width } : undefined}
                     >
                       {col.cell ? col.cell(row, (currentPage - 1) * pageSize + rowIndex) : row[col.accessor]}
                     </td>
