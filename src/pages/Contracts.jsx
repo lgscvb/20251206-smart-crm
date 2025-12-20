@@ -544,7 +544,7 @@ export default function Contracts() {
 
   const { data: contracts, isLoading, refetch } = useContracts({
     // 預設排除已到期和已取消的合約
-    status: statusFilter ? `eq.${statusFilter}` : 'in.(active,pending)',
+    status: statusFilter ? `eq.${statusFilter}` : 'in.(active,pending,pending_sign)',
     customer_id: customerIdFilter ? `eq.${customerIdFilter}` : undefined,
     limit: 99999
   })
@@ -860,6 +860,7 @@ export default function Contracts() {
               <option value="">全部（不含已結束）</option>
               <option value="active">生效中</option>
               <option value="pending">待生效</option>
+              <option value="pending_sign">待簽約</option>
             </select>
           </div>
 
