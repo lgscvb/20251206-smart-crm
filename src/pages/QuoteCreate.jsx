@@ -182,7 +182,7 @@ export default function QuoteCreate() {
   const createQuote = useMutation({
     mutationFn: (data) => callTool('quote_create', data),
     onSuccess: async (response) => {
-      console.log('quote_create response:', response)
+      console.log('quote_create response:', JSON.stringify(response, null, 2))
       const data = response?.result || response
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['quotes'] })
@@ -195,13 +195,15 @@ export default function QuoteCreate() {
 
         navigate('/quotes')
       } else {
-        console.error('quote_create failed:', data)
-        addNotification({ type: 'error', message: data.message || data.error || '建立失敗（請檢查 console）' })
+        const errorMsg = data.message || data.error || response?.error || '未知錯誤'
+        console.error('quote_create failed:', JSON.stringify(data, null, 2))
+        console.error('Full response:', JSON.stringify(response, null, 2))
+        addNotification({ type: 'error', message: `建立失敗: ${errorMsg}` })
       }
     },
     onError: (error) => {
-      console.error('quote_create error:', error)
-      addNotification({ type: 'error', message: `建立失敗: ${error.message}` })
+      console.error('quote_create error:', error?.response?.data || error.message || error)
+      addNotification({ type: 'error', message: `建立失敗: ${error?.response?.data?.error || error.message}` })
     }
   })
 
