@@ -196,9 +196,13 @@ export default function QuotePDF({ data }) {
   const ownItems = items.filter(item => item.revenue_type !== 'referral')
   const referralItems = items.filter(item => item.revenue_type === 'referral')
 
+  // 進一步區分代辦服務：一次性 vs 非一次性（月繳）
+  const referralOneTimeItems = referralItems.filter(item => item.billing_cycle === 'one_time' || item.unit === '次')
+  const referralRecurringItems = referralItems.filter(item => item.billing_cycle !== 'one_time' && item.unit !== '次')
+
   // 計算金額
   const ownSubtotal = ownItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
-  const referralSubtotal = referralItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+  const referralOneTimeSubtotal = referralOneTimeItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
 
   // 簽約應付合計（自己收款的項目 + 押金）
   const signTotal = Number(total_amount) + Number(deposit_amount)
@@ -279,22 +283,29 @@ export default function QuotePDF({ data }) {
               <Text style={[styles.tableHeaderCell, { width: '30%' }]}>金額 (NTD)</Text>
             </View>
 
-            {/* 代辦服務項目 */}
-            {referralItems.map((item, index) => (
-              <View key={index} style={styles.tableRow}>
-                <Text style={styles.tableCellName}>
-                  {item.name}
-                  {item.quantity > 1 && item.unit && ` (${item.quantity} ${item.unit})`}
-                </Text>
+            {/* 一次性代辦服務 */}
+            {referralOneTimeItems.map((item, index) => (
+              <View key={`onetime-${index}`} style={styles.tableRow}>
+                <Text style={styles.tableCellName}>{item.name}</Text>
                 <Text style={styles.tableCellAmount}>{formatCurrency(item.amount)}</Text>
               </View>
             ))}
 
-            {/* 代辦服務小計 */}
-            <View style={[styles.totalRow, { backgroundColor: '#f5f5f5' }]}>
-              <Text style={[styles.totalLabel, { color: '#666666' }]}>代辦服務小計</Text>
-              <Text style={[styles.totalAmount, { color: '#666666' }]}>{formatCurrency(referralSubtotal)}</Text>
-            </View>
+            {/* 非一次性代辦服務（顯示每月金額） */}
+            {referralRecurringItems.map((item, index) => (
+              <View key={`recurring-${index}`} style={styles.tableRow}>
+                <Text style={styles.tableCellName}>{item.name}</Text>
+                <Text style={styles.tableCellAmount}>{formatCurrency(item.unit_price)}/月</Text>
+              </View>
+            ))}
+
+            {/* 一次性服務小計（只有一次性才顯示） */}
+            {referralOneTimeItems.length > 0 && (
+              <View style={[styles.totalRow, { backgroundColor: '#f5f5f5' }]}>
+                <Text style={[styles.totalLabel, { color: '#666666' }]}>一次性小計</Text>
+                <Text style={[styles.totalAmount, { color: '#666666' }]}>{formatCurrency(referralOneTimeSubtotal)}</Text>
+              </View>
+            )}
           </View>
         )}
 

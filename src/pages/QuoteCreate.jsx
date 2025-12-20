@@ -255,7 +255,8 @@ export default function QuoteCreate() {
         unit: plan.unit || '月',
         unit_price: parseFloat(plan.unit_price) || 0,
         amount: (parseFloat(plan.unit_price) || 0) * quantity,
-        revenue_type: plan.revenue_type || 'own'  // own=自己收款, referral=代辦服務
+        revenue_type: plan.revenue_type || 'own',  // own=自己收款, referral=代辦服務
+        billing_cycle: plan.billing_cycle || 'one_time'  // one_time=一次性, monthly=月繳
       }
 
       // 計算新的押金總額
@@ -308,9 +309,14 @@ export default function QuoteCreate() {
   const ownItems = form.items.filter(item => item.revenue_type !== 'referral')
   const referralItems = form.items.filter(item => item.revenue_type === 'referral')
 
+  // 進一步區分代辦服務：一次性 vs 非一次性（月繳）
+  const referralOneTimeItems = referralItems.filter(item => item.billing_cycle === 'one_time' || item.unit === '次')
+  const referralRecurringItems = referralItems.filter(item => item.billing_cycle !== 'one_time' && item.unit !== '次')
+
   // 計算金額
   const ownSubtotal = ownItems.reduce((sum, item) => sum + (item.amount || 0), 0)
-  const referralSubtotal = referralItems.reduce((sum, item) => sum + (item.amount || 0), 0)
+  const referralOneTimeSubtotal = referralOneTimeItems.reduce((sum, item) => sum + (item.amount || 0), 0)
+  // 非一次性服務不計入合計，只顯示每月金額
   const subtotal = ownSubtotal  // 只計算自己收款的項目
   const total = subtotal - (parseFloat(form.discount_amount) || 0)
 
@@ -691,9 +697,28 @@ export default function QuoteCreate() {
               {referralItems.length > 0 && (
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <h4 className="font-medium text-gray-700 mb-2">代辦服務（後收）</h4>
-                  <div className="flex justify-between text-sm">
-                    <span>代辦服務小計</span>
-                    <span className="text-gray-600">${referralSubtotal.toLocaleString()}</span>
+                  <div className="space-y-1 text-sm">
+                    {/* 一次性代辦服務 */}
+                    {referralOneTimeItems.map((item, index) => (
+                      <div key={`onetime-${index}`} className="flex justify-between">
+                        <span>{item.name}</span>
+                        <span className="text-gray-600">${(item.amount || 0).toLocaleString()}</span>
+                      </div>
+                    ))}
+                    {/* 非一次性代辦服務（顯示每月金額） */}
+                    {referralRecurringItems.map((item, index) => (
+                      <div key={`recurring-${index}`} className="flex justify-between">
+                        <span>{item.name}</span>
+                        <span className="text-gray-600">${(item.unit_price || 0).toLocaleString()}/月</span>
+                      </div>
+                    ))}
+                    {/* 小計（只計算一次性） */}
+                    {referralOneTimeItems.length > 0 && (
+                      <div className="flex justify-between pt-1 border-t border-gray-200">
+                        <span className="font-medium">一次性小計</span>
+                        <span className="text-gray-700 font-medium">${referralOneTimeSubtotal.toLocaleString()}</span>
+                      </div>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
                     * 代辦服務費用於服務完成後另行收取
@@ -813,16 +838,11 @@ export default function QuoteCreate() {
                     <div className="w-28 p-2 text-center font-bold">金額 (NTD)</div>
                   </div>
 
-                  {/* 代辦服務項目 */}
-                  {referralItems.map((item, index) => (
-                    <div key={index} className="flex border-b">
+                  {/* 一次性代辦服務 */}
+                  {referralOneTimeItems.map((item, index) => (
+                    <div key={`onetime-${index}`} className="flex border-b">
                       <div className="flex-1 p-2">
                         {item.name || '（項目名稱）'}
-                        {item.quantity > 1 && item.unit && (
-                          <span className="text-gray-500 ml-1">
-                            ({item.quantity} {item.unit})
-                          </span>
-                        )}
                       </div>
                       <div className="w-28 p-2 text-right font-mono">
                         {formatCurrency(item.amount)}
@@ -830,13 +850,27 @@ export default function QuoteCreate() {
                     </div>
                   ))}
 
-                  {/* 代辦服務小計 */}
-                  <div className="flex bg-gray-100">
-                    <div className="flex-1 p-2 text-center font-bold text-gray-700 text-sm">代辦服務小計</div>
-                    <div className="w-28 p-2 text-right font-bold text-gray-700 text-sm font-mono">
-                      {formatCurrency(referralSubtotal)}
+                  {/* 非一次性代辦服務（顯示每月金額） */}
+                  {referralRecurringItems.map((item, index) => (
+                    <div key={`recurring-${index}`} className="flex border-b">
+                      <div className="flex-1 p-2">
+                        {item.name || '（項目名稱）'}
+                      </div>
+                      <div className="w-28 p-2 text-right font-mono">
+                        {formatCurrency(item.unit_price)}/月
+                      </div>
                     </div>
-                  </div>
+                  ))}
+
+                  {/* 一次性服務小計（只有一次性才顯示） */}
+                  {referralOneTimeItems.length > 0 && (
+                    <div className="flex bg-gray-100">
+                      <div className="flex-1 p-2 text-center font-bold text-gray-700 text-sm">一次性小計</div>
+                      <div className="w-28 p-2 text-right font-bold text-gray-700 text-sm font-mono">
+                        {formatCurrency(referralOneTimeSubtotal)}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
