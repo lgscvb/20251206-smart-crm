@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Save, Loader2, Trash2 } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, Trash2, MessageCircle, Send } from 'lucide-react'
 import { callTool, db } from '../services/api'
 import useStore from '../store/useStore'
 import { pdf } from '@react-pdf/renderer'
@@ -84,6 +84,13 @@ export default function QuoteCreate() {
   const queryClient = useQueryClient()
   const addNotification = useStore((state) => state.addNotification)
   const selectedBranch = useStore((state) => state.selectedBranch)
+  const [searchParams] = useSearchParams()
+
+  // 從 URL 參數讀取預填值（來自 Brain 系統）
+  const urlCustomerName = searchParams.get('customer_name') || ''
+  const urlLineUserId = searchParams.get('line_user_id') || ''
+  const urlNotes = searchParams.get('notes') || ''
+  const isFromBrain = !!urlLineUserId  // 判斷是否從 Brain 跳轉過來
 
   // 取得分館列表
   const { data: branches } = useQuery({
@@ -94,7 +101,7 @@ export default function QuoteCreate() {
   // 表單狀態
   const [form, setForm] = useState({
     branch_id: selectedBranch || '',
-    customer_name: '',
+    customer_name: urlCustomerName,
     customer_phone: '',
     customer_email: '',
     company_name: '',
@@ -107,8 +114,9 @@ export default function QuoteCreate() {
     discount_note: '',
     deposit_amount: 6000,
     valid_days: 30,
-    internal_notes: '',
-    customer_notes: ''
+    internal_notes: urlNotes ? `【客戶需求】${urlNotes}` : '',
+    customer_notes: '',
+    line_user_id: urlLineUserId  // 儲存 LINE User ID（用於發送報價單）
   })
 
   // 生成並下載 PDF
@@ -250,7 +258,8 @@ export default function QuoteCreate() {
       deposit_amount: parseFloat(form.deposit_amount) || 0,
       valid_days: form.valid_days,
       internal_notes: form.internal_notes || null,
-      customer_notes: form.customer_notes || null
+      customer_notes: form.customer_notes || null,
+      line_user_id: form.line_user_id || null  // LINE User ID（來自 Brain）
     })
   }
 
@@ -282,6 +291,13 @@ export default function QuoteCreate() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className="text-xl font-bold">建立報價單</h1>
+          {/* Brain 來源標記 */}
+          {isFromBrain && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm">
+              <MessageCircle className="w-4 h-4" />
+              來自 LINE 詢問
+            </span>
+          )}
         </div>
         <button
           onClick={handleSubmit}

@@ -25,7 +25,8 @@ import {
   Copy,
   Loader2,
   ArrowRightCircle,
-  FileDown
+  FileDown,
+  MessageCircle
 } from 'lucide-react'
 
 // 狀態中文對照
@@ -231,6 +232,26 @@ export default function Quotes() {
       } else {
         addNotification({ type: 'error', message: data.message || '更新失敗' })
       }
+    }
+  })
+
+  // 發送報價單到 LINE
+  const [sendingToLine, setSendingToLine] = useState(null)
+  const sendToLine = useMutation({
+    mutationFn: ({ quoteId, lineUserId }) => callTool('quote_send_to_line', { quote_id: quoteId, line_user_id: lineUserId }),
+    onSuccess: (response) => {
+      const data = response?.result || response
+      if (data.success) {
+        queryClient.invalidateQueries({ queryKey: ['quotes'] })
+        addNotification({ type: 'success', message: data.message || '報價單已發送給客戶' })
+      } else {
+        addNotification({ type: 'error', message: data.message || '發送失敗' })
+      }
+      setSendingToLine(null)
+    },
+    onError: (error) => {
+      addNotification({ type: 'error', message: `發送失敗: ${error.message}` })
+      setSendingToLine(null)
     }
   })
 
@@ -608,6 +629,27 @@ export default function Quotes() {
               title="標記為已發送"
             >
               <Send className="w-4 h-4" />
+            </button>
+          )}
+          {/* LINE 發送按鈕：只有當報價單有 line_user_id 時顯示 */}
+          {row.line_user_id && row.status === 'draft' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (confirm('確定要發送報價單給客戶的 LINE？')) {
+                  setSendingToLine(row.id)
+                  sendToLine.mutate({ quoteId: row.id, lineUserId: row.line_user_id })
+                }
+              }}
+              disabled={sendingToLine === row.id}
+              className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg disabled:opacity-50"
+              title="發送到客戶 LINE"
+            >
+              {sendingToLine === row.id ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <MessageCircle className="w-4 h-4" />
+              )}
             </button>
           )}
           {/* 所有狀態都可以刪除 */}
@@ -1147,9 +1189,17 @@ export default function Quotes() {
             {/* 狀態與基本資訊 */}
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <Badge variant={STATUS_VARIANTS[selectedQuote.status]} className="text-sm">
-                  {STATUS_LABELS[selectedQuote.status]}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={STATUS_VARIANTS[selectedQuote.status]} className="text-sm">
+                    {STATUS_LABELS[selectedQuote.status]}
+                  </Badge>
+                  {selectedQuote.line_user_id && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs">
+                      <MessageCircle className="w-3 h-3" />
+                      LINE 詢問
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-gray-500 mt-1">
                   建立於 {selectedQuote.created_at?.split('T')[0]}
                 </p>
@@ -1242,6 +1292,31 @@ export default function Quotes() {
             <div className="flex justify-end gap-2 pt-4 border-t">
               {selectedQuote.status === 'draft' && (
                 <>
+                  {/* 發送到 LINE 按鈕（只有當 line_user_id 存在時顯示） */}
+                  {selectedQuote.line_user_id && (
+                    <button
+                      onClick={() => {
+                        if (confirm('確定要發送報價單給客戶的 LINE？')) {
+                          setSendingToLine(selectedQuote.id)
+                          sendToLine.mutate({ quoteId: selectedQuote.id, lineUserId: selectedQuote.line_user_id })
+                        }
+                      }}
+                      className="btn-success"
+                      disabled={sendingToLine === selectedQuote.id}
+                    >
+                      {sendingToLine === selectedQuote.id ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          發送中...
+                        </>
+                      ) : (
+                        <>
+                          <MessageCircle className="w-4 h-4 mr-2" />
+                          發送到 LINE
+                        </>
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => updateStatus.mutate({ quoteId: selectedQuote.id, status: 'sent' })}
                     className="btn-primary"
