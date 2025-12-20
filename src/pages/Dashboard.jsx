@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useBranchRevenue, useTodayTasks, useOverdueDetails, useRenewalReminders, usePaymentsDue } from '../hooks/useApi'
+import { useBranchRevenue, useTodayTasks, useOverdueDetails, useRenewalReminders, usePaymentsDue, useTodayBookings } from '../hooks/useApi'
 import { useNavigate } from 'react-router-dom'
 import {
   Users,
@@ -67,6 +67,7 @@ export default function Dashboard() {
   const { data: overdue, isLoading: overdueLoading, refetch: refetchOverdue } = useOverdueDetails()
   const { data: renewals } = useRenewalReminders()
   const { data: paymentsDue } = usePaymentsDue()
+  const { data: todayBookings, isLoading: bookingsLoading } = useTodayBookings()
 
   // 催繳狀態
   const [sendingReminder, setSendingReminder] = useState({})
@@ -182,6 +183,50 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {/* 今日預約 */}
+      {todayBookings?.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-blue-500" />
+              今日會議室預約
+            </h3>
+            <button
+              onClick={() => navigate('/bookings')}
+              className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+            >
+              查看全部 <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {todayBookings.map((booking) => (
+              <div
+                key={booking.id}
+                className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100"
+              >
+                <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex flex-col items-center justify-center">
+                  <span className="text-xs text-blue-600 font-medium">
+                    {booking.start_time?.slice(0, 5)}
+                  </span>
+                  <span className="text-xs text-blue-400">
+                    {booking.end_time?.slice(0, 5)}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {booking.customer_name}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {booking.company_name || '個人'} · {booking.duration_minutes}分鐘
+                  </p>
+                </div>
+                <Badge variant="info">已確認</Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 財務統計卡片 - 最重要 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

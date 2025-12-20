@@ -308,6 +308,41 @@ export function useTodayTasks() {
   })
 }
 
+// 今日會議室預約
+export function useTodayBookings() {
+  const today = new Date().toISOString().split('T')[0]
+
+  return useQuery({
+    queryKey: ['today-bookings', today],
+    queryFn: async () => {
+      try {
+        // 查詢今日的預約
+        const response = await fetch(`/api/db/meeting_room_bookings?booking_date=eq.${today}&status=eq.confirmed&order=start_time.asc`)
+        if (!response.ok) throw new Error('Failed to fetch bookings')
+        const bookings = await response.json()
+
+        // 查詢客戶名稱
+        if (bookings.length > 0) {
+          const customerIds = [...new Set(bookings.map(b => b.customer_id))]
+          const customersRes = await fetch(`/api/db/customers?id=in.(${customerIds.join(',')})&select=id,name,company_name`)
+          const customers = await customersRes.json()
+          const customerMap = Object.fromEntries(customers.map(c => [c.id, c]))
+
+          return bookings.map(b => ({
+            ...b,
+            customer_name: customerMap[b.customer_id]?.name || '未知',
+            company_name: customerMap[b.customer_id]?.company_name || ''
+          }))
+        }
+        return bookings
+      } catch (error) {
+        console.error('載入今日預約失敗:', error)
+        return []
+      }
+    }
+  })
+}
+
 export function useBranches() {
   return useQuery({
     queryKey: ['branches'],
