@@ -333,7 +333,7 @@ export const crm = {
   },
 
   async updateCustomer(customerId, data) {
-    return callTool('crm_update_customer', { customer_id: customerId, ...data })
+    return callTool('crm_update_customer', { customer_id: customerId, updates: data })
   },
 
   async recordPayment(paymentId, paymentMethod, reference) {
