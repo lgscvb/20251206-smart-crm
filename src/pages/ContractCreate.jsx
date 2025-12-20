@@ -584,6 +584,7 @@ export default function ContractCreate() {
                     <option value="quarterly">季繳</option>
                     <option value="semi_annual">半年繳</option>
                     <option value="annual">年繳</option>
+                    <option value="biennial">兩年繳</option>
                   </select>
                 </div>
                 <div>

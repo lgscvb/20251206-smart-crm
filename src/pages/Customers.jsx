@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useCustomers, useCreateCustomer, useBranches } from '../hooks/useApi'
+import { useCustomers, useCreateCustomer, useUpdateCustomer, useBranches } from '../hooks/useApi'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import Badge, { StatusBadge } from '../components/Badge'
-import { Plus, User, Building, Phone, Mail, MessageSquare, UserX, Settings2, ChevronDown } from 'lucide-react'
+import { Plus, User, Building, Phone, Mail, MessageSquare, UserX, Settings2, ChevronDown, Trash2 } from 'lucide-react'
 
 // 可選欄位定義
 const OPTIONAL_COLUMNS = {
@@ -40,6 +40,19 @@ export default function Customers() {
   })
   const { data: branches } = useBranches()
   const createCustomer = useCreateCustomer()
+  const updateCustomer = useUpdateCustomer()
+
+  // 刪除確認
+  const [deleteTarget, setDeleteTarget] = useState(null)
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    await updateCustomer.mutateAsync({
+      customerId: deleteTarget.id,
+      data: { status: 'churned' }
+    })
+    setDeleteTarget(null)
+  }
 
   // 所有欄位定義
   const allColumns = [
@@ -140,6 +153,24 @@ export default function Customers() {
         <div className="text-sm text-gray-600">
           {row.phone || <span className="text-gray-400">-</span>}
         </div>
+      )
+    },
+    {
+      key: 'actions',
+      header: '',
+      accessor: 'id',
+      fixed: true,
+      cell: (row) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setDeleteTarget(row)
+          }}
+          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+          title="刪除客戶"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       )
     }
   ]
@@ -429,6 +460,43 @@ export default function Customers() {
               </div>
             </div>
           </div>
+        </div>
+      </Modal>
+
+      {/* 刪除確認 Modal */}
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="確認刪除客戶"
+        size="sm"
+        footer={
+          <>
+            <button
+              onClick={() => setDeleteTarget(null)}
+              className="btn-secondary"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={updateCustomer.isPending}
+              className="btn-danger"
+            >
+              {updateCustomer.isPending ? '處理中...' : '確認刪除'}
+            </button>
+          </>
+        }
+      >
+        <div className="text-center py-4">
+          <div className="w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+            <Trash2 className="w-6 h-6 text-red-600" />
+          </div>
+          <p className="text-gray-700">
+            確定要將客戶 <span className="font-semibold">{deleteTarget?.name}</span> 標記為流失嗎？
+          </p>
+          <p className="text-sm text-gray-500 mt-2">
+            客戶將移至「流失客戶」列表，可隨時恢復
+          </p>
         </div>
       </Modal>
     </div>

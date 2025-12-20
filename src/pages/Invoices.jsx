@@ -45,21 +45,20 @@ export default function Invoices() {
   })
 
   // 取得發票列表（已付款的繳費記錄）
-  // 注意：invoice_number, invoice_date, invoice_status, tax_id 欄位尚未在資料庫建立
   const { data: invoices = [], isLoading, refetch } = useQuery({
     queryKey: ['invoices', branchFilter, statusFilter, dateRange],
     queryFn: async () => {
       const params = {
         payment_status: 'eq.paid',
         order: 'paid_at.desc',
-        limit: 200,
-        select: 'id,customer_id,branch_id,payment_period,amount,due_date,paid_at,payment_method,notes,customer:customers(name,company_name),branch:branches(name)'
+        limit: 500,
+        select: 'id,customer_id,branch_id,payment_period,amount,due_date,paid_at,payment_method,notes,invoice_number,invoice_date,invoice_status,customer:customers(name,company_name,company_tax_id),branch:branches(name)'
       }
 
       if (branchFilter) params.branch_id = `eq.${branchFilter}`
-      // 暫時停用發票狀態篩選（欄位不存在）
-      // if (statusFilter === 'issued') params.invoice_number = 'not.is.null'
-      // if (statusFilter === 'pending') params.invoice_number = 'is.null'
+      // 發票狀態篩選
+      if (statusFilter === 'issued') params.invoice_number = 'not.is.null'
+      if (statusFilter === 'pending') params.invoice_number = 'is.null'
       if (dateRange.start) params.paid_at = `gte.${dateRange.start}`
       if (dateRange.end) {
         if (params.paid_at) {
@@ -184,7 +183,7 @@ export default function Invoices() {
       key: 'tax_id',
       header: '統編',
       accessor: 'customer',
-      cell: (row) => row.customer?.tax_id || <span className="text-gray-400">無</span>
+      cell: (row) => row.customer?.company_tax_id || <span className="text-gray-400">無</span>
     },
     {
       key: 'invoice_number',
@@ -194,6 +193,16 @@ export default function Invoices() {
         <span className="font-mono text-primary-600">{row.invoice_number}</span>
       ) : (
         <span className="text-gray-400">未開立</span>
+      )
+    },
+    {
+      key: 'invoice_date',
+      header: '開立日期',
+      accessor: 'invoice_date',
+      cell: (row) => (
+        <span className="text-sm">
+          {row.invoice_date ? new Date(row.invoice_date).toLocaleDateString('zh-TW') : '-'}
+        </span>
       )
     },
     {
@@ -423,7 +432,8 @@ export default function Invoices() {
 
 // 開立發票 Modal
 function CreateInvoiceModal({ payment, onClose, onSubmit, isLoading }) {
-  const [invoiceType, setInvoiceType] = useState(payment.customer?.tax_id ? 'business' : 'personal')
+  const taxId = payment.customer?.company_tax_id
+  const [invoiceType, setInvoiceType] = useState(taxId ? 'business' : 'personal')
   const [carrierType, setCarrierType] = useState('')
   const [carrierNumber, setCarrierNumber] = useState('')
   const [donateCode, setDonateCode] = useState('')
@@ -434,7 +444,7 @@ function CreateInvoiceModal({ payment, onClose, onSubmit, isLoading }) {
       payment_id: payment.id,
       invoice_type: invoiceType,
       buyer_name: payment.customer?.company_name || payment.customer?.name,
-      buyer_tax_id: invoiceType === 'business' ? payment.customer?.tax_id : null,
+      buyer_tax_id: invoiceType === 'business' ? taxId : null,
       carrier_type: carrierType || null,
       carrier_number: carrierNumber || null,
       donate_code: donateCode || null
@@ -449,8 +459,8 @@ function CreateInvoiceModal({ payment, onClose, onSubmit, isLoading }) {
         <div className="mb-4 p-3 bg-gray-50 rounded-lg">
           <p className="text-sm text-gray-600">客戶：{payment.customer?.name}</p>
           <p className="text-sm text-gray-600">金額：${(payment.amount || 0).toLocaleString()}</p>
-          {payment.customer?.tax_id && (
-            <p className="text-sm text-gray-600">統編：{payment.customer.tax_id}</p>
+          {taxId && (
+            <p className="text-sm text-gray-600">統編：{taxId}</p>
           )}
         </div>
 
@@ -463,8 +473,8 @@ function CreateInvoiceModal({ payment, onClose, onSubmit, isLoading }) {
               className="input w-full"
             >
               <option value="personal">二聯式（個人）</option>
-              <option value="business" disabled={!payment.customer?.tax_id}>
-                三聯式（公司）{!payment.customer?.tax_id && '- 無統編'}
+              <option value="business" disabled={!taxId}>
+                三聯式（公司）{!taxId && '- 無統編'}
               </option>
             </select>
           </div>

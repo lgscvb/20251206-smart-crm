@@ -75,33 +75,8 @@ export default function Dashboard() {
   // 自動通知開關
   const [autoNotifyEnabled, setAutoNotifyEnabled] = useState(false)
 
-  // 模擬通知記錄（實際應該從後端 API 取得）
-  const [notificationHistory] = useState([
-    {
-      id: 1,
-      type: 'payment_reminder',
-      customer: '張小明',
-      message: '催繳通知已發送',
-      timestamp: '2024-12-19 10:30',
-      status: 'success'
-    },
-    {
-      id: 2,
-      type: 'renewal_reminder',
-      customer: '李大華',
-      message: '續約提醒已發送',
-      timestamp: '2024-12-19 09:15',
-      status: 'success'
-    },
-    {
-      id: 3,
-      type: 'payment_reminder',
-      customer: '王美玲',
-      message: '催繳通知發送失敗',
-      timestamp: '2024-12-19 08:45',
-      status: 'error'
-    }
-  ])
+  // 通知記錄（TODO: 接入後端 API）
+  const [notificationHistory] = useState([])
 
   // 發送催繳
   const handleSendReminder = async (item) => {
