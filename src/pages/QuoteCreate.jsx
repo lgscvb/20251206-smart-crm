@@ -1,76 +1,58 @@
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Save, Loader2, Trash2, MessageCircle, Send } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, Trash2, MessageCircle, Plus, Package } from 'lucide-react'
 import { callTool, db } from '../services/api'
 import useStore from '../store/useStore'
 import { pdf } from '@react-pdf/renderer'
 import QuotePDF from '../components/pdf/QuotePDF'
 
-// 營業登記方案選項
-const VIRTUAL_OFFICE_OPTIONS = {
-  original_price: 3000, // 原價
-  prices: [1490, 1690, 1800, 2000], // 折扣價選項
-  cycles: [
-    { label: '年繳', months: 12 },
-    { label: '半年繳', months: 6 }
-  ]
+// 分類排序與顯示名稱
+const CATEGORY_CONFIG = {
+  '登記服務': { order: 1, icon: '📋' },
+  '空間服務': { order: 2, icon: '🏢' },
+  '加值服務': { order: 3, icon: '✨' }
 }
 
-// 服務類型預設值
-const SERVICE_PRESETS = {
-  virtual_office: {
-    label: '營業登記',
-    description: '商業登記地址服務',
-    plan_name: '營業登記方案',
-    contract_months: 12,
-    deposit_amount: 6000,
-    original_price: 3000,
-    hasSubOptions: true,
-    items: [
-      { name: '商登月租費', quantity: 12, unit: '月', unit_price: 1490, amount: 17880 }
-    ]
-  },
-  office: {
-    label: '辦公室',
-    description: '獨立辦公室租賃',
-    plan_name: '辦公室租賃',
-    contract_months: 12,
-    deposit_amount: 0,
-    items: [
-      { name: '辦公室月租', quantity: 1, unit: '月', unit_price: 0, amount: 0 }
-    ]
-  },
-  hot_desk: {
-    label: '共享辦公位',
-    description: 'Hot Desking 彈性座位',
-    plan_name: '共享辦公位方案',
-    contract_months: 1,
-    deposit_amount: 0,
-    items: [
-      { name: '共享辦公位月租', quantity: 1, unit: '月', unit_price: 3000, amount: 3000 }
-    ]
-  },
-  meeting_room: {
-    label: '會議室',
-    description: '會議室租用',
-    plan_name: '會議室租用',
-    contract_months: 1,
-    deposit_amount: 0,
-    items: [
-      { name: '會議室租用', quantity: 1, unit: '小時', unit_price: 2000, amount: 2000 }
-    ]
-  },
-  custom: {
-    label: '自訂',
-    description: '自訂方案內容',
-    plan_name: '',
-    contract_months: 12,
-    deposit_amount: 0,
-    items: [
-      { name: '', quantity: 1, unit: '', unit_price: 0, amount: 0 }
-    ]
+// 計算合約月數（從 billing_cycle 和 min_duration）
+const getContractMonths = (plan) => {
+  if (plan.min_duration) {
+    const match = plan.min_duration.match(/(\d+)/)
+    if (match) {
+      const num = parseInt(match[1])
+      if (plan.min_duration.includes('年')) return num * 12
+      if (plan.min_duration.includes('月')) return num
+    }
   }
+  // 根據 billing_cycle 推算
+  switch (plan.billing_cycle) {
+    case 'annual': return 12
+    case 'semi_annual': return 6
+    case 'quarterly': return 3
+    case 'monthly': return 1
+    default: return 1
+  }
+}
+
+// 計算數量（根據 billing_cycle）
+const getQuantity = (plan) => {
+  switch (plan.billing_cycle) {
+    case 'annual': return 12
+    case 'semi_annual': return 6
+    case 'quarterly': return 3
+    case 'monthly': return 1
+    default: return 1
+  }
+}
+
+// 從方案 code 推導 contract_type
+const getContractType = (plan) => {
+  const code = plan.code || ''
+  if (code.includes('virtual_office')) return 'virtual_office'
+  if (code.includes('coworking')) return 'hot_desk'
+  if (code.includes('meeting_room')) return 'meeting_room'
+  if (code.includes('private_office')) return 'office'
+  return 'custom'
 }
 
 // 格式化金額
@@ -98,6 +80,31 @@ export default function QuoteCreate() {
     queryFn: () => db.getBranches()
   })
 
+  // 取得服務方案列表
+  const { data: servicePlans = [] } = useQuery({
+    queryKey: ['service_plans'],
+    queryFn: () => db.query('service_plans', { is_active: 'eq.true', order: 'sort_order.asc' })
+  })
+
+  // 按分類分組服務方案
+  const groupedPlans = useMemo(() => {
+    const groups = {}
+    servicePlans.forEach(plan => {
+      const category = plan.category || '其他'
+      if (!groups[category]) groups[category] = []
+      groups[category].push(plan)
+    })
+    // 按照 CATEGORY_CONFIG 排序
+    return Object.entries(groups).sort((a, b) => {
+      const orderA = CATEGORY_CONFIG[a[0]]?.order || 99
+      const orderB = CATEGORY_CONFIG[b[0]]?.order || 99
+      return orderA - orderB
+    })
+  }, [servicePlans])
+
+  // 已選擇的方案 ID（可多選）
+  const [selectedPlanIds, setSelectedPlanIds] = useState([])
+
   // 表單狀態
   const [form, setForm] = useState({
     branch_id: selectedBranch || '',
@@ -105,14 +112,14 @@ export default function QuoteCreate() {
     customer_phone: '',
     customer_email: '',
     company_name: '',
-    contract_type: 'virtual_office',
-    plan_name: '營業登記方案',
+    contract_type: 'custom',
+    plan_name: '',
     contract_months: 12,
-    original_price: 3000,
-    items: [{ name: '商登月租費', quantity: 12, unit: '月', unit_price: 1490, amount: 17880 }],
+    original_price: 0,
+    items: [],
     discount_amount: 0,
     discount_note: '',
-    deposit_amount: 6000,
+    deposit_amount: 0,
     valid_days: 30,
     internal_notes: urlNotes ? `【客戶需求】${urlNotes}` : '',
     customer_notes: '',
@@ -209,26 +216,88 @@ export default function QuoteCreate() {
     })
   }
 
-  // 套用服務類型預設值
-  const applyServicePreset = (serviceType) => {
-    const preset = SERVICE_PRESETS[serviceType]
-    if (!preset) return
+  // 切換選擇服務方案（多選）
+  const togglePlan = (plan) => {
+    const isSelected = selectedPlanIds.includes(plan.id)
 
-    setForm({
-      ...form,
-      contract_type: serviceType,
-      plan_name: preset.plan_name,
-      contract_months: preset.contract_months,
-      deposit_amount: preset.deposit_amount,
-      original_price: preset.original_price || 0,
-      items: preset.items.map(item => ({ ...item }))
-    })
+    if (isSelected) {
+      // 取消選擇：移除該方案
+      const newPlanIds = selectedPlanIds.filter(id => id !== plan.id)
+      setSelectedPlanIds(newPlanIds)
+
+      // 從 items 中移除該方案的項目
+      const newItems = form.items.filter(item => item.plan_id !== plan.id)
+
+      // 重新計算押金
+      const remainingPlans = servicePlans.filter(p => newPlanIds.includes(p.id))
+      const totalDeposit = remainingPlans.reduce((sum, p) => sum + (parseFloat(p.deposit) || 0), 0)
+
+      setForm({
+        ...form,
+        items: newItems,
+        deposit_amount: totalDeposit,
+        plan_name: remainingPlans.map(p => p.name).join(' + ') || ''
+      })
+    } else {
+      // 新增選擇：加入該方案
+      const newPlanIds = [...selectedPlanIds, plan.id]
+      setSelectedPlanIds(newPlanIds)
+
+      // 建立新項目
+      const quantity = getQuantity(plan)
+      const newItem = {
+        plan_id: plan.id,  // 用於識別是哪個方案
+        name: plan.name,
+        quantity: quantity,
+        unit: plan.unit || '月',
+        unit_price: parseFloat(plan.unit_price) || 0,
+        amount: (parseFloat(plan.unit_price) || 0) * quantity
+      }
+
+      // 計算新的押金總額
+      const allSelectedPlans = [...servicePlans.filter(p => selectedPlanIds.includes(p.id)), plan]
+      const totalDeposit = allSelectedPlans.reduce((sum, p) => sum + (parseFloat(p.deposit) || 0), 0)
+
+      // 計算合約月數（取最長的）
+      const maxContractMonths = Math.max(
+        form.contract_months,
+        getContractMonths(plan)
+      )
+
+      setForm({
+        ...form,
+        items: [...form.items, newItem],
+        deposit_amount: totalDeposit,
+        contract_months: maxContractMonths,
+        contract_type: getContractType(plan),
+        plan_name: allSelectedPlans.map(p => p.name).join(' + ')
+      })
+    }
   }
 
   // 移除項目
   const removeItem = (index) => {
+    const itemToRemove = form.items[index]
     const newItems = form.items.filter((_, i) => i !== index)
-    setForm({ ...form, items: newItems })
+
+    // 如果移除的項目有 plan_id，同步更新 selectedPlanIds
+    if (itemToRemove?.plan_id) {
+      setSelectedPlanIds(prev => prev.filter(id => id !== itemToRemove.plan_id))
+
+      // 重新計算押金
+      const remainingPlanIds = selectedPlanIds.filter(id => id !== itemToRemove.plan_id)
+      const remainingPlans = servicePlans.filter(p => remainingPlanIds.includes(p.id))
+      const totalDeposit = remainingPlans.reduce((sum, p) => sum + (parseFloat(p.deposit) || 0), 0)
+
+      setForm({
+        ...form,
+        items: newItems,
+        deposit_amount: totalDeposit,
+        plan_name: remainingPlans.map(p => p.name).join(' + ') || ''
+      })
+    } else {
+      setForm({ ...form, items: newItems })
+    }
   }
 
   // 計算總金額
@@ -340,95 +409,63 @@ export default function QuoteCreate() {
               </select>
             </div>
 
-            {/* 服務類型快速選擇 */}
-            <div>
-              <label className="label">服務類型</label>
-              <div className="grid grid-cols-5 gap-2">
-                {Object.entries(SERVICE_PRESETS).map(([key, preset]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => applyServicePreset(key)}
-                    className={`p-3 rounded-lg border-2 transition-all text-center ${
-                      form.contract_type === key
-                        ? 'border-primary-500 bg-primary-50 text-primary-700'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="font-medium text-sm">{preset.label}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 營業登記子選項 */}
-            {form.contract_type === 'virtual_office' && (
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="grid grid-cols-2 gap-4">
-                  {/* 月租金額選擇 */}
-                  <div>
-                    <label className="label text-blue-900">月租金額</label>
-                    <div className="flex flex-wrap gap-2">
-                      {VIRTUAL_OFFICE_OPTIONS.prices.map((price) => (
-                        <button
-                          key={price}
-                          type="button"
-                          onClick={() => {
-                            const newItems = [...form.items]
-                            if (newItems[0]) {
-                              newItems[0].unit_price = price
-                              newItems[0].amount = price * newItems[0].quantity
-                            }
-                            setForm({ ...form, items: newItems })
-                          }}
-                          className={`px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
-                            form.items[0]?.unit_price === price
-                              ? 'border-blue-500 bg-blue-100 text-blue-700'
-                              : 'border-gray-300 hover:border-blue-300 hover:bg-blue-50'
-                          }`}
-                        >
-                          ${price.toLocaleString()}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {/* 繳費週期選擇 */}
-                  <div>
-                    <label className="label text-blue-900">繳費週期</label>
-                    <div className="flex gap-2">
-                      {VIRTUAL_OFFICE_OPTIONS.cycles.map((cycle) => (
-                        <button
-                          key={cycle.months}
-                          type="button"
-                          onClick={() => {
-                            const newItems = [...form.items]
-                            if (newItems[0]) {
-                              newItems[0].quantity = cycle.months
-                              newItems[0].amount = newItems[0].unit_price * cycle.months
-                            }
-                            setForm({ ...form, contract_months: cycle.months, items: newItems })
-                          }}
-                          className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
-                            form.contract_months === cycle.months
-                              ? 'border-blue-500 bg-blue-100 text-blue-700'
-                              : 'border-gray-300 hover:border-blue-300 hover:bg-blue-50'
-                          }`}
-                        >
-                          {cycle.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                {/* 即時計算預覽 */}
-                <div className="mt-3 pt-3 border-t border-blue-200 text-sm text-blue-800">
-                  <span className="font-medium">
-                    ${form.items[0]?.unit_price?.toLocaleString() || 0}/月 × {form.contract_months} 個月 =
-                    <span className="text-lg ml-1">${(form.items[0]?.amount || 0).toLocaleString()}</span>
+            {/* 服務方案選擇（按分類分組） */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="label flex items-center gap-2">
+                  <Package className="w-4 h-4" />
+                  選擇服務方案
+                </label>
+                {selectedPlanIds.length > 0 && (
+                  <span className="text-sm text-primary-600">
+                    已選 {selectedPlanIds.length} 項
                   </span>
-                </div>
+                )}
               </div>
-            )}
+
+              {groupedPlans.map(([category, plans]) => (
+                <div key={category} className="p-4 bg-white rounded-lg border">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                    <span>{CATEGORY_CONFIG[category]?.icon || '📦'}</span>
+                    {category}
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {plans.map((plan) => {
+                      const isSelected = selectedPlanIds.includes(plan.id)
+                      return (
+                        <button
+                          key={plan.id}
+                          type="button"
+                          onClick={() => togglePlan(plan)}
+                          className={`px-3 py-2 rounded-lg border-2 text-sm transition-all ${
+                            isSelected
+                              ? 'border-primary-500 bg-primary-50 text-primary-700 ring-2 ring-primary-200'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="font-medium">{plan.name}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            ${parseFloat(plan.unit_price).toLocaleString()}/{plan.unit}
+                            {plan.deposit > 0 && (
+                              <span className="ml-1 text-orange-600">
+                                +押金${parseFloat(plan.deposit).toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              {/* 快速提示 */}
+              {selectedPlanIds.length === 0 && (
+                <div className="text-center py-4 text-gray-400 text-sm">
+                  點擊上方按鈕選擇服務方案，可多選
+                </div>
+              )}
+            </div>
 
             {/* 客戶資訊 */}
             <div className="p-4 bg-white rounded-lg border">
