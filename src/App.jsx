@@ -12,6 +12,7 @@ import Commissions from './pages/Commissions'
 import Quotes from './pages/Quotes'
 import QuoteCreate from './pages/QuoteCreate'
 import QuoteDetail from './pages/QuoteDetail'
+import QuotePublic from './pages/QuotePublic'
 import Invoices from './pages/Invoices'
 import LegalLetters from './pages/LegalLetters'
 import Reports from './pages/Reports'
@@ -27,6 +28,10 @@ import ContractCreate from './pages/ContractCreate'
 function App() {
   return (
     <Routes>
+      {/* 公開頁面（不需登入） */}
+      <Route path="/quote/:quoteNumber" element={<QuotePublic />} />
+
+      {/* 後台管理頁面 */}
       <Route path="/" element={<Layout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
