@@ -192,8 +192,16 @@ export default function QuotePDF({ data }) {
     contact_phone = '04-23760282'
   } = data
 
-  // 計算總金額（含押金）
-  const grandTotal = Number(total_amount) + Number(deposit_amount)
+  // 分離簽約費用與代辦服務
+  const ownItems = items.filter(item => item.revenue_type !== 'referral')
+  const referralItems = items.filter(item => item.revenue_type === 'referral')
+
+  // 計算金額
+  const ownSubtotal = ownItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+  const referralSubtotal = referralItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+
+  // 簽約應付合計（自己收款的項目 + 押金）
+  const signTotal = Number(total_amount) + Number(deposit_amount)
 
   return (
     <Document>
@@ -214,45 +222,81 @@ export default function QuotePDF({ data }) {
           <Text>有效期限：{valid_until}</Text>
         </View>
 
-        {/* 服務項目表格 */}
-        <View style={styles.table}>
-          {/* 表頭 */}
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, { width: '70%' }]}>服務項目</Text>
-            <Text style={[styles.tableHeaderCell, { width: '30%' }]}>請款金額 (NTD)</Text>
-          </View>
+        {/* 簽約應付款項 */}
+        {(ownItems.length > 0 || deposit_amount > 0) && (
+          <View style={styles.table}>
+            {/* 區塊標題 */}
+            <View style={{ backgroundColor: '#2d5a27', padding: 8 }}>
+              <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>簽約應付款項</Text>
+            </View>
 
-          {/* 方案標題 */}
-          {plan_name && (
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionHeaderText}>
-                {plan_name}（依合約內指定付款時間點）
+            {/* 表頭 */}
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderCell, { width: '70%' }]}>服務項目</Text>
+              <Text style={[styles.tableHeaderCell, { width: '30%' }]}>金額 (NTD)</Text>
+            </View>
+
+            {/* 自己收款的項目 */}
+            {ownItems.map((item, index) => (
+              <View key={index} style={styles.tableRow}>
+                <Text style={styles.tableCellName}>
+                  {item.name}
+                  {item.quantity > 1 && item.unit && ` (${item.quantity} ${item.unit})`}
+                </Text>
+                <Text style={styles.tableCellAmount}>{formatCurrency(item.amount)}</Text>
+              </View>
+            ))}
+
+            {/* 押金 */}
+            {deposit_amount > 0 && (
+              <View style={styles.tableRow}>
+                <Text style={styles.tableCellName}>押金</Text>
+                <Text style={styles.tableCellAmount}>{formatCurrency(deposit_amount)}</Text>
+              </View>
+            )}
+
+            {/* 簽約應付合計 */}
+            <View style={[styles.totalRow, { backgroundColor: '#e8f5e9' }]}>
+              <Text style={styles.totalLabel}>簽約應付合計</Text>
+              <Text style={styles.totalAmount}>{formatCurrency(signTotal)}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* 代辦服務 */}
+        {referralItems.length > 0 && (
+          <View style={[styles.table, { marginTop: 15 }]}>
+            {/* 區塊標題 */}
+            <View style={{ backgroundColor: '#666666', padding: 8 }}>
+              <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>
+                代辦服務（費用於服務完成後收取）
               </Text>
             </View>
-          )}
 
-          {/* 項目列表 */}
-          {items.map((item, index) => (
-            <View key={index} style={styles.tableRow}>
-              <Text style={styles.tableCellName}>{item.name}</Text>
-              <Text style={styles.tableCellAmount}>{formatCurrency(item.amount)}</Text>
+            {/* 表頭 */}
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderCell, { width: '70%' }]}>服務項目</Text>
+              <Text style={[styles.tableHeaderCell, { width: '30%' }]}>金額 (NTD)</Text>
             </View>
-          ))}
 
-          {/* 押金 */}
-          {deposit_amount > 0 && (
-            <View style={styles.tableRow}>
-              <Text style={styles.tableCellName}>押金</Text>
-              <Text style={styles.tableCellAmount}>{formatCurrency(deposit_amount)}</Text>
+            {/* 代辦服務項目 */}
+            {referralItems.map((item, index) => (
+              <View key={index} style={styles.tableRow}>
+                <Text style={styles.tableCellName}>
+                  {item.name}
+                  {item.quantity > 1 && item.unit && ` (${item.quantity} ${item.unit})`}
+                </Text>
+                <Text style={styles.tableCellAmount}>{formatCurrency(item.amount)}</Text>
+              </View>
+            ))}
+
+            {/* 代辦服務小計 */}
+            <View style={[styles.totalRow, { backgroundColor: '#f5f5f5' }]}>
+              <Text style={[styles.totalLabel, { color: '#666666' }]}>代辦服務小計</Text>
+              <Text style={[styles.totalAmount, { color: '#666666' }]}>{formatCurrency(referralSubtotal)}</Text>
             </View>
-          )}
-
-          {/* 合計 */}
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>合計</Text>
-            <Text style={styles.totalAmount}>{formatCurrency(grandTotal)}</Text>
           </View>
-        </View>
+        )}
 
         {/* 銀行資訊 */}
         <View style={styles.bankInfo}>

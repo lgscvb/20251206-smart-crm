@@ -11,7 +11,8 @@ import QuotePDF from '../components/pdf/QuotePDF'
 const CATEGORY_CONFIG = {
   '登記服務': { order: 1, icon: '📋' },
   '空間服務': { order: 2, icon: '🏢' },
-  '加值服務': { order: 3, icon: '✨' }
+  '代辦服務': { order: 3, icon: '📝' },
+  '加值服務': { order: 4, icon: '✨' }
 }
 
 // 計算合約月數（從 billing_cycle 和 min_duration）
@@ -244,14 +245,17 @@ export default function QuoteCreate() {
       setSelectedPlanIds(newPlanIds)
 
       // 建立新項目
-      const quantity = getQuantity(plan)
+      // 會計服務特殊處理：14個月/年
+      const isAccounting = plan.code === 'accounting_service'
+      const quantity = isAccounting ? (plan.annual_months || 14) : getQuantity(plan)
       const newItem = {
         plan_id: plan.id,  // 用於識別是哪個方案
         name: plan.name,
         quantity: quantity,
         unit: plan.unit || '月',
         unit_price: parseFloat(plan.unit_price) || 0,
-        amount: (parseFloat(plan.unit_price) || 0) * quantity
+        amount: (parseFloat(plan.unit_price) || 0) * quantity,
+        revenue_type: plan.revenue_type || 'own'  // own=自己收款, referral=代辦服務
       }
 
       // 計算新的押金總額
@@ -300,8 +304,14 @@ export default function QuoteCreate() {
     }
   }
 
-  // 計算總金額
-  const subtotal = form.items.reduce((sum, item) => sum + (item.amount || 0), 0)
+  // 分離簽約費用與代辦服務
+  const ownItems = form.items.filter(item => item.revenue_type !== 'referral')
+  const referralItems = form.items.filter(item => item.revenue_type === 'referral')
+
+  // 計算金額
+  const ownSubtotal = ownItems.reduce((sum, item) => sum + (item.amount || 0), 0)
+  const referralSubtotal = referralItems.reduce((sum, item) => sum + (item.amount || 0), 0)
+  const subtotal = ownSubtotal  // 只計算自己收款的項目
   const total = subtotal - (parseFloat(form.discount_amount) || 0)
 
   // 處理提交
@@ -632,44 +642,64 @@ export default function QuoteCreate() {
             </div>
 
             {/* 金額計算 */}
-            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>小計</span>
-                  <span>${subtotal.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">折扣</span>
-                  <input
-                    type="number"
-                    value={form.discount_amount}
-                    onChange={(e) => setForm({ ...form, discount_amount: e.target.value })}
-                    className="input w-24 text-right"
-                    min="0"
-                  />
-                  <input
-                    type="text"
-                    value={form.discount_note}
-                    onChange={(e) => setForm({ ...form, discount_note: e.target.value })}
-                    className="input flex-1"
-                    placeholder="折扣說明"
-                  />
-                </div>
-                <div className="flex justify-between text-lg font-bold pt-2 border-t border-green-300">
-                  <span>總計</span>
-                  <span className="text-green-600">${total.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center gap-2 pt-2">
-                  <span className="text-sm">押金</span>
-                  <input
-                    type="number"
-                    value={form.deposit_amount}
-                    onChange={(e) => setForm({ ...form, deposit_amount: e.target.value })}
-                    className="input w-24 text-right"
-                    min="0"
-                  />
+            <div className="space-y-3">
+              {/* 簽約應付款項 */}
+              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                <h4 className="font-medium text-green-800 mb-2">簽約應付款項</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>服務費小計</span>
+                    <span>${ownSubtotal.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">折扣</span>
+                    <input
+                      type="number"
+                      value={form.discount_amount}
+                      onChange={(e) => setForm({ ...form, discount_amount: e.target.value })}
+                      className="input w-24 text-right"
+                      min="0"
+                    />
+                    <input
+                      type="text"
+                      value={form.discount_note}
+                      onChange={(e) => setForm({ ...form, discount_note: e.target.value })}
+                      className="input flex-1"
+                      placeholder="折扣說明"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">押金</span>
+                    <input
+                      type="number"
+                      value={form.deposit_amount}
+                      onChange={(e) => setForm({ ...form, deposit_amount: e.target.value })}
+                      className="input w-24 text-right"
+                      min="0"
+                    />
+                  </div>
+                  <div className="flex justify-between text-lg font-bold pt-2 border-t border-green-300">
+                    <span>簽約應付合計</span>
+                    <span className="text-green-600">
+                      ${(total + (parseFloat(form.deposit_amount) || 0)).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
+
+              {/* 代辦服務（如果有的話） */}
+              {referralItems.length > 0 && (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="font-medium text-gray-700 mb-2">代辦服務（後收）</h4>
+                  <div className="flex justify-between text-sm">
+                    <span>代辦服務小計</span>
+                    <span className="text-gray-600">${referralSubtotal.toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    * 代辦服務費用於服務完成後另行收取
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* 有效期與備註 */}
@@ -718,56 +748,97 @@ export default function QuoteCreate() {
                 <div className="font-medium text-gray-700">合約期限：{form.contract_months} 個月（{form.contract_months >= 12 ? `${Math.floor(form.contract_months / 12)}年${form.contract_months % 12 > 0 ? `${form.contract_months % 12}個月` : ''}` : `${form.contract_months}個月`}）</div>
               </div>
 
-              {/* 服務項目表格 */}
-              <div className="border rounded-lg overflow-hidden mb-4 text-xs">
-                {/* 表頭 */}
-                <div className="flex bg-gray-100 border-b">
-                  <div className="flex-1 p-2 text-center font-bold">服務項目</div>
-                  <div className="w-28 p-2 text-center font-bold">請款金額 (NTD)</div>
+              {/* 簽約應付款項 */}
+              {(ownItems.length > 0 || parseFloat(form.deposit_amount) > 0) && (
+                <div className="border rounded-lg overflow-hidden mb-4 text-xs">
+                  {/* 區塊標題 */}
+                  <div className="bg-[#2d5a27] text-white p-2 text-center font-bold">
+                    簽約應付款項
+                  </div>
+
+                  {/* 表頭 */}
+                  <div className="flex bg-gray-100 border-b">
+                    <div className="flex-1 p-2 text-center font-bold">服務項目</div>
+                    <div className="w-28 p-2 text-center font-bold">金額 (NTD)</div>
+                  </div>
+
+                  {/* 自己收款的項目 */}
+                  {ownItems.map((item, index) => (
+                    <div key={index} className="flex border-b">
+                      <div className="flex-1 p-2">
+                        {item.name || '（項目名稱）'}
+                        {item.quantity > 1 && item.unit && (
+                          <span className="text-gray-500 ml-1">
+                            ({item.quantity} {item.unit})
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-28 p-2 text-right font-mono">
+                        {formatCurrency(item.amount)}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* 押金 */}
+                  {parseFloat(form.deposit_amount) > 0 && (
+                    <div className="flex border-b">
+                      <div className="flex-1 p-2">押金</div>
+                      <div className="w-28 p-2 text-right font-mono">
+                        {formatCurrency(form.deposit_amount)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 簽約應付合計 */}
+                  <div className="flex bg-[#e8f5e9]">
+                    <div className="flex-1 p-2 text-center font-bold text-[#2d5a27] text-sm">簽約應付合計</div>
+                    <div className="w-28 p-2 text-right font-bold text-[#2d5a27] text-sm font-mono">
+                      {formatCurrency(total + (parseFloat(form.deposit_amount) || 0))}
+                    </div>
+                  </div>
                 </div>
+              )}
 
-                {/* 方案標題 */}
-                {form.plan_name && (
-                  <div className="bg-gray-50 border-b p-2 text-center font-medium">
-                    {form.plan_name}（依合約內指定付款時間點）
+              {/* 代辦服務 */}
+              {referralItems.length > 0 && (
+                <div className="border rounded-lg overflow-hidden mb-4 text-xs">
+                  {/* 區塊標題 */}
+                  <div className="bg-gray-600 text-white p-2 text-center font-bold">
+                    代辦服務（費用於服務完成後收取）
                   </div>
-                )}
 
-                {/* 項目列表 */}
-                {form.items.map((item, index) => (
-                  <div key={index} className="flex border-b">
-                    <div className="flex-1 p-2">
-                      {item.name || '（項目名稱）'}
-                      {item.quantity > 1 && item.unit && (
-                        <span className="text-gray-500 ml-1">
-                          ({item.quantity} {item.unit})
-                        </span>
-                      )}
-                    </div>
-                    <div className="w-28 p-2 text-right font-mono">
-                      {formatCurrency(item.amount)}
-                    </div>
+                  {/* 表頭 */}
+                  <div className="flex bg-gray-100 border-b">
+                    <div className="flex-1 p-2 text-center font-bold">服務項目</div>
+                    <div className="w-28 p-2 text-center font-bold">金額 (NTD)</div>
                   </div>
-                ))}
 
-                {/* 押金 */}
-                {parseFloat(form.deposit_amount) > 0 && (
-                  <div className="flex border-b">
-                    <div className="flex-1 p-2">押金</div>
-                    <div className="w-28 p-2 text-right font-mono">
-                      {formatCurrency(form.deposit_amount)}
+                  {/* 代辦服務項目 */}
+                  {referralItems.map((item, index) => (
+                    <div key={index} className="flex border-b">
+                      <div className="flex-1 p-2">
+                        {item.name || '（項目名稱）'}
+                        {item.quantity > 1 && item.unit && (
+                          <span className="text-gray-500 ml-1">
+                            ({item.quantity} {item.unit})
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-28 p-2 text-right font-mono">
+                        {formatCurrency(item.amount)}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  ))}
 
-                {/* 合計 */}
-                <div className="flex bg-gray-50">
-                  <div className="flex-1 p-2 text-center font-bold text-[#2d5a27] text-sm">合計</div>
-                  <div className="w-28 p-2 text-right font-bold text-[#2d5a27] text-sm font-mono">
-                    {formatCurrency(total + (parseFloat(form.deposit_amount) || 0))}
+                  {/* 代辦服務小計 */}
+                  <div className="flex bg-gray-100">
+                    <div className="flex-1 p-2 text-center font-bold text-gray-700 text-sm">代辦服務小計</div>
+                    <div className="w-28 p-2 text-right font-bold text-gray-700 text-sm font-mono">
+                      {formatCurrency(referralSubtotal)}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* 銀行資訊 */}
               <div className="mb-4 text-xs border rounded">
