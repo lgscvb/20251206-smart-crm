@@ -63,6 +63,8 @@ export default function Modal({
                 {/* Content */}
                 <div className="px-6 py-4 max-h-[70vh] overflow-y-auto">
                   {children}
+                  {/* 確保 FocusTrap 有可聚焦元素（當 children 為空時） */}
+                  {!children && <button className="sr-only" aria-hidden="true" />}
                 </div>
 
                 {/* Footer */}

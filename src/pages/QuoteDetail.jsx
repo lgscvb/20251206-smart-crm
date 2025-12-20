@@ -164,7 +164,19 @@ export default function QuoteDetail() {
     const startDate = quote.proposed_start_date || today.toISOString().split('T')[0]
     const months = quote.contract_months || 12
     const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + months))
-    const monthlyRent = quote.total_amount ? Math.round(quote.total_amount / months) : ''
+
+    // 正確計算月租金：只取 own 項目中 billing_cycle 為 monthly 的 unit_price
+    // 代辦服務(referral)不算入月租金
+    let monthlyRent = ''
+    if (items && items.length > 0) {
+      const monthlyOwnItems = items.filter(item =>
+        item.revenue_type !== 'referral' &&
+        item.billing_cycle && item.billing_cycle !== 'one_time'
+      )
+      if (monthlyOwnItems.length > 0) {
+        monthlyRent = monthlyOwnItems.reduce((sum, item) => sum + (parseFloat(item.unit_price) || 0), 0)
+      }
+    }
 
     setContractForm({
       company_name: quote.company_name || '',
@@ -245,11 +257,27 @@ export default function QuoteDetail() {
     }
   }
 
-  // 解析 items
+  // 解析 items 並分類
   const items = useMemo(() => {
     if (!quote?.items) return []
     return typeof quote.items === 'string' ? JSON.parse(quote.items) : quote.items
   }, [quote?.items])
+
+  // 分離自己收款項目和代辦服務
+  const { ownItems, referralItems, ownSubtotal, referralSubtotal, signTotal } = useMemo(() => {
+    const own = items.filter(item => item.revenue_type !== 'referral')
+    const referral = items.filter(item => item.revenue_type === 'referral')
+    const ownSum = own.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0)
+    const referralSum = referral.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0)
+    const deposit = parseFloat(quote?.deposit_amount) || 0
+    return {
+      ownItems: own,
+      referralItems: referral,
+      ownSubtotal: ownSum,
+      referralSubtotal: referralSum,
+      signTotal: ownSum + deposit  // 簽約應付 = 自己收款項目 + 押金
+    }
+  }, [items, quote?.deposit_amount])
 
   if (isLoading) {
     return (
@@ -392,54 +420,101 @@ export default function QuoteDetail() {
               費用明細
             </h3>
 
-            {items.length > 0 ? (
-              <div className="border rounded-lg overflow-hidden mb-4">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left">項目</th>
-                      <th className="px-4 py-3 text-right">數量</th>
-                      <th className="px-4 py-3 text-right">單價</th>
-                      <th className="px-4 py-3 text-right">金額</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="px-4 py-3">{item.name}</td>
-                        <td className="px-4 py-3 text-right">{item.quantity} {item.unit}</td>
-                        <td className="px-4 py-3 text-right">${item.unit_price?.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right font-medium">${item.amount?.toLocaleString()}</td>
+            {/* 簽約應付款項 */}
+            {(ownItems.length > 0 || quote.deposit_amount > 0) && (
+              <div className="mb-4">
+                <h4 className="text-sm font-semibold text-green-700 mb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  簽約應付款項
+                </h4>
+                <div className="border border-green-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-green-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-green-700">項目</th>
+                        <th className="px-4 py-2 text-right text-green-700">數量</th>
+                        <th className="px-4 py-2 text-right text-green-700">單價</th>
+                        <th className="px-4 py-2 text-right text-green-700">金額</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {ownItems.map((item, i) => (
+                        <tr key={i} className="border-t border-green-100">
+                          <td className="px-4 py-2">{item.name}</td>
+                          <td className="px-4 py-2 text-right">{item.quantity} {item.unit}</td>
+                          <td className="px-4 py-2 text-right">${item.unit_price?.toLocaleString()}</td>
+                          <td className="px-4 py-2 text-right font-medium">${item.amount?.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                      {quote.deposit_amount > 0 && (
+                        <tr className="border-t border-green-100 bg-orange-50">
+                          <td className="px-4 py-2 text-orange-700">押金</td>
+                          <td className="px-4 py-2 text-right">1</td>
+                          <td className="px-4 py-2 text-right">${quote.deposit_amount?.toLocaleString()}</td>
+                          <td className="px-4 py-2 text-right font-medium text-orange-700">${quote.deposit_amount?.toLocaleString()}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                    <tfoot className="bg-green-100">
+                      <tr>
+                        <td colSpan="3" className="px-4 py-2 text-right font-semibold text-green-800">簽約應付合計</td>
+                        <td className="px-4 py-2 text-right text-lg font-bold text-green-700">${signTotal.toLocaleString()}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
-            ) : (
+            )}
+
+            {/* 代辦服務（如有） */}
+            {referralItems.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-semibold text-gray-600 mb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+                  代辦服務
+                  <span className="text-xs font-normal text-gray-400">（費用於服務完成後收取）</span>
+                </h4>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-gray-600">項目</th>
+                        <th className="px-4 py-2 text-right text-gray-600">數量</th>
+                        <th className="px-4 py-2 text-right text-gray-600">單價</th>
+                        <th className="px-4 py-2 text-right text-gray-600">金額</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {referralItems.map((item, i) => (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td className="px-4 py-2 text-gray-600">{item.name}</td>
+                          <td className="px-4 py-2 text-right text-gray-600">{item.quantity} {item.unit}</td>
+                          <td className="px-4 py-2 text-right text-gray-600">${item.unit_price?.toLocaleString()}</td>
+                          <td className="px-4 py-2 text-right font-medium text-gray-600">${item.amount?.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-100">
+                      <tr>
+                        <td colSpan="3" className="px-4 py-2 text-right font-semibold text-gray-600">代辦服務合計</td>
+                        <td className="px-4 py-2 text-right font-bold text-gray-600">${referralSubtotal.toLocaleString()}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {items.length === 0 && (
               <p className="text-gray-500 mb-4">無費用明細</p>
             )}
 
-            {/* 金額總計 */}
-            <div className="bg-green-50 rounded-lg p-4 space-y-2">
-              {quote.discount_amount > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">折扣</span>
-                  <span className="text-red-600">-${quote.discount_amount.toLocaleString()}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="font-medium">服務費用總計</span>
-                <span className="text-xl font-bold text-green-600">
-                  ${(quote.total_amount || 0).toLocaleString()}
-                </span>
+            {/* 總計提示 */}
+            {quote.discount_amount > 0 && (
+              <div className="text-sm text-gray-500 text-right">
+                已折扣 ${quote.discount_amount.toLocaleString()}
               </div>
-              {quote.deposit_amount > 0 && (
-                <div className="flex justify-between text-sm pt-2 border-t border-green-200">
-                  <span className="text-gray-600">押金</span>
-                  <span className="font-semibold text-orange-600">${quote.deposit_amount.toLocaleString()}</span>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           {/* 備註 */}
