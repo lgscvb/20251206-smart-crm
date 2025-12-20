@@ -6,6 +6,7 @@ import { pdf } from '@react-pdf/renderer'
 import QuotePDF from '../components/pdf/QuotePDF'
 import Modal from '../components/Modal'
 import Badge from '../components/Badge'
+import useStore from '../store/useStore'
 import {
   ArrowLeft,
   FileText,
@@ -59,6 +60,7 @@ export default function QuoteDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const addNotification = useStore((state) => state.addNotification)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [sendingToLine, setSendingToLine] = useState(false)
   const [showConvertModal, setShowConvertModal] = useState(false)
@@ -116,11 +118,18 @@ export default function QuoteDetail() {
   // 發送到 LINE
   const sendToLine = useMutation({
     mutationFn: () => callTool('quote_send_to_line', { quote_id: parseInt(id), line_user_id: quote?.line_user_id }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['quote', id] })
+    onSuccess: (response) => {
+      const result = response?.result || response
+      if (result?.success) {
+        addNotification({ type: 'success', message: result.message || '報價單已發送到 LINE' })
+        queryClient.invalidateQueries({ queryKey: ['quote', id] })
+      } else {
+        addNotification({ type: 'error', message: result?.message || '發送失敗' })
+      }
       setSendingToLine(false)
     },
-    onError: () => {
+    onError: (error) => {
+      addNotification({ type: 'error', message: `LINE 發送失敗：${error.message}` })
       setSendingToLine(false)
     }
   })
