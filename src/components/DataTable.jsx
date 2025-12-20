@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import {
   ChevronUp,
   ChevronDown,
@@ -21,8 +21,12 @@ export default function DataTable({
   onRefresh,
   onRowClick,
   emptyMessage = '沒有資料',
-  actions
+  actions,
+  id: tableId
 }) {
+  // 生成唯一 ID（若未提供）
+  const generatedId = useId()
+  const uniqueId = tableId || generatedId
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState(null)
   const [sortDir, setSortDir] = useState('asc')
@@ -96,8 +100,8 @@ export default function DataTable({
             <div className="relative flex-1 sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
-                id="table-search"
-                name="table-search"
+                id={`${uniqueId}-search`}
+                name={`${uniqueId}-search`}
                 type="text"
                 placeholder="搜尋..."
                 aria-label="搜尋表格"
