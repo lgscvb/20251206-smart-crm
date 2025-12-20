@@ -285,8 +285,10 @@ export default function Quotes() {
         setShowDetailModal(false)
         setShowConvertModal(false)
         resetContractForm()
-        // 跳轉到合約管理頁面
-        navigate('/contracts')
+        // 跳轉到合約管理頁面，並自動開啟編輯 Modal
+        navigate('/contracts', {
+          state: { editContractId: data.contract?.id }
+        })
       } else {
         addNotification({ type: 'error', message: data.message || '轉換失敗' })
       }
@@ -324,8 +326,19 @@ export default function Quotes() {
     const months = quote.contract_months || 12
     const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + months))
 
-    // 計算月租（折扣價）= 總金額 / 月數
-    const monthlyRent = quote.total_amount ? Math.round(quote.total_amount / months) : ''
+    // 正確計算月租金：只取 own 項目中 billing_cycle 非 one_time 的 unit_price
+    // 代辦服務(referral)不算入月租金
+    let monthlyRent = ''
+    if (quote.items) {
+      const items = typeof quote.items === 'string' ? JSON.parse(quote.items) : quote.items
+      const monthlyOwnItems = items.filter(item =>
+        item.revenue_type !== 'referral' &&
+        item.billing_cycle && item.billing_cycle !== 'one_time'
+      )
+      if (monthlyOwnItems.length > 0) {
+        monthlyRent = monthlyOwnItems.reduce((sum, item) => sum + (parseFloat(item.unit_price) || 0), 0)
+      }
+    }
 
     setContractForm({
       company_name: quote.company_name || '',
@@ -558,11 +571,24 @@ export default function Quotes() {
     {
       header: '金額',
       accessor: 'total_amount',
-      cell: (row) => (
-        <span className="font-semibold text-green-600">
-          ${(row.total_amount || 0).toLocaleString()}
-        </span>
-      )
+      cell: (row) => {
+        // 計算簽約應付金額（只計算 own 項目 + 押金，不含代辦服務）
+        let signTotal = 0
+        if (row.items) {
+          const items = typeof row.items === 'string' ? JSON.parse(row.items) : row.items
+          const ownTotal = items
+            .filter(item => item.revenue_type !== 'referral')
+            .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0)
+          signTotal = ownTotal + (parseFloat(row.deposit_amount) || 0)
+        } else {
+          signTotal = (row.total_amount || 0) + (parseFloat(row.deposit_amount) || 0)
+        }
+        return (
+          <span className="font-semibold text-green-600">
+            ${signTotal.toLocaleString()}
+          </span>
+        )
+      }
     },
     {
       header: '有效期',
@@ -1205,12 +1231,27 @@ export default function Quotes() {
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold text-green-600">
-                  ${(selectedQuote.total_amount || 0).toLocaleString()}
-                </p>
-                {selectedQuote.deposit_amount > 0 && (
-                  <p className="text-sm text-gray-500">押金 ${selectedQuote.deposit_amount.toLocaleString()}</p>
-                )}
+                {(() => {
+                  // 計算簽約應付金額
+                  let signTotal = 0
+                  if (selectedQuote.items) {
+                    const items = typeof selectedQuote.items === 'string' ? JSON.parse(selectedQuote.items) : selectedQuote.items
+                    const ownTotal = items
+                      .filter(item => item.revenue_type !== 'referral')
+                      .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0)
+                    signTotal = ownTotal + (parseFloat(selectedQuote.deposit_amount) || 0)
+                  }
+                  return (
+                    <>
+                      <p className="text-2xl font-bold text-green-600">
+                        ${signTotal.toLocaleString()}
+                      </p>
+                      {selectedQuote.deposit_amount > 0 && (
+                        <p className="text-sm text-gray-500">含押金 ${selectedQuote.deposit_amount.toLocaleString()}</p>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
             </div>
 
@@ -1249,36 +1290,106 @@ export default function Quotes() {
             </div>
 
             {/* 費用明細 */}
-            {selectedQuote.items && (
-              <div>
-                <h4 className="font-medium mb-2">費用明細</h4>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-3 py-2 text-left">項目</th>
-                        <th className="px-3 py-2 text-right">數量</th>
-                        <th className="px-3 py-2 text-right">單價</th>
-                        <th className="px-3 py-2 text-right">金額</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(typeof selectedQuote.items === 'string'
-                        ? JSON.parse(selectedQuote.items)
-                        : selectedQuote.items
-                      ).map((item, i) => (
-                        <tr key={i} className="border-t">
-                          <td className="px-3 py-2">{item.name}</td>
-                          <td className="px-3 py-2 text-right">{item.quantity}</td>
-                          <td className="px-3 py-2 text-right">${item.unit_price?.toLocaleString()}</td>
-                          <td className="px-3 py-2 text-right">${item.amount?.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {selectedQuote.items && (() => {
+              const items = typeof selectedQuote.items === 'string'
+                ? JSON.parse(selectedQuote.items)
+                : selectedQuote.items
+              const ownItems = items.filter(item => item.revenue_type !== 'referral')
+              const referralItems = items.filter(item => item.revenue_type === 'referral')
+              const ownSubtotal = ownItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0)
+              const referralSubtotal = referralItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0)
+              const deposit = parseFloat(selectedQuote.deposit_amount) || 0
+              const signTotal = ownSubtotal + deposit
+
+              return (
+                <div className="space-y-3">
+                  {/* 簽約應付款項 */}
+                  {(ownItems.length > 0 || deposit > 0) && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-green-700 mb-1 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                        簽約應付款項
+                      </h4>
+                      <div className="border border-green-200 rounded-lg overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-green-50">
+                            <tr>
+                              <th className="px-3 py-1.5 text-left text-green-700 text-xs">項目</th>
+                              <th className="px-3 py-1.5 text-right text-green-700 text-xs">數量</th>
+                              <th className="px-3 py-1.5 text-right text-green-700 text-xs">單價</th>
+                              <th className="px-3 py-1.5 text-right text-green-700 text-xs">金額</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ownItems.map((item, i) => (
+                              <tr key={i} className="border-t border-green-100">
+                                <td className="px-3 py-1.5 text-xs">{item.name}</td>
+                                <td className="px-3 py-1.5 text-right text-xs">{item.quantity}</td>
+                                <td className="px-3 py-1.5 text-right text-xs">${item.unit_price?.toLocaleString()}</td>
+                                <td className="px-3 py-1.5 text-right text-xs font-medium">${item.amount?.toLocaleString()}</td>
+                              </tr>
+                            ))}
+                            {deposit > 0 && (
+                              <tr className="border-t border-green-100 bg-orange-50">
+                                <td className="px-3 py-1.5 text-xs text-orange-700">押金</td>
+                                <td className="px-3 py-1.5 text-right text-xs">1</td>
+                                <td className="px-3 py-1.5 text-right text-xs">${deposit.toLocaleString()}</td>
+                                <td className="px-3 py-1.5 text-right text-xs font-medium text-orange-700">${deposit.toLocaleString()}</td>
+                              </tr>
+                            )}
+                          </tbody>
+                          <tfoot className="bg-green-100">
+                            <tr>
+                              <td colSpan="3" className="px-3 py-1.5 text-right text-xs font-semibold text-green-800">簽約應付合計</td>
+                              <td className="px-3 py-1.5 text-right text-sm font-bold text-green-700">${signTotal.toLocaleString()}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 代辦服務 */}
+                  {referralItems.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-600 mb-1 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+                        代辦服務
+                        <span className="text-xs font-normal text-gray-400">（費用另計）</span>
+                      </h4>
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 py-1.5 text-left text-gray-600 text-xs">項目</th>
+                              <th className="px-3 py-1.5 text-right text-gray-600 text-xs">數量</th>
+                              <th className="px-3 py-1.5 text-right text-gray-600 text-xs">單價</th>
+                              <th className="px-3 py-1.5 text-right text-gray-600 text-xs">金額</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {referralItems.map((item, i) => (
+                              <tr key={i} className="border-t border-gray-100">
+                                <td className="px-3 py-1.5 text-xs text-gray-600">{item.name}</td>
+                                <td className="px-3 py-1.5 text-right text-xs text-gray-600">{item.quantity}</td>
+                                <td className="px-3 py-1.5 text-right text-xs text-gray-600">${item.unit_price?.toLocaleString()}</td>
+                                <td className="px-3 py-1.5 text-right text-xs font-medium text-gray-600">${item.amount?.toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-gray-100">
+                            <tr>
+                              <td colSpan="3" className="px-3 py-1.5 text-right text-xs font-semibold text-gray-600">代辦服務合計</td>
+                              <td className="px-3 py-1.5 text-right text-sm font-bold text-gray-600">${referralSubtotal.toLocaleString()}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* 備註 */}
             {selectedQuote.internal_notes && (
@@ -1435,8 +1546,19 @@ export default function Quotes() {
                   <p className="font-medium">{selectedQuote.quote_number}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-500">報價金額</p>
-                  <p className="font-bold text-green-600">${(selectedQuote.total_amount || 0).toLocaleString()}</p>
+                  <p className="text-sm text-gray-500">簽約應付</p>
+                  {(() => {
+                    // 計算簽約應付金額（只計算 own 項目 + 押金）
+                    let signTotal = 0
+                    if (selectedQuote.items) {
+                      const items = typeof selectedQuote.items === 'string' ? JSON.parse(selectedQuote.items) : selectedQuote.items
+                      const ownTotal = items
+                        .filter(item => item.revenue_type !== 'referral')
+                        .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0)
+                      signTotal = ownTotal + (parseFloat(selectedQuote.deposit_amount) || 0)
+                    }
+                    return <p className="font-bold text-green-600">${signTotal.toLocaleString()}</p>
+                  })()}
                 </div>
               </div>
             </div>

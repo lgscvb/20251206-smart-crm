@@ -151,7 +151,10 @@ export default function QuoteDetail() {
         queryClient.invalidateQueries({ queryKey: ['quotes'] })
         queryClient.invalidateQueries({ queryKey: ['contracts'] })
         setShowConvertModal(false)
-        navigate('/contracts')
+        // 跳轉到合約管理頁面，並自動開啟編輯 Modal
+        navigate('/contracts', {
+          state: { editContractId: data.contract?.id }
+        })
       }
     }
   })
