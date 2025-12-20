@@ -313,11 +313,9 @@ export default function QuoteCreate() {
   const referralOneTimeItems = referralItems.filter(item => item.billing_cycle === 'one_time' || item.unit === '次')
   const referralRecurringItems = referralItems.filter(item => item.billing_cycle !== 'one_time' && item.unit !== '次')
 
-  // 計算金額
+  // 計算金額（只計算自己收款的項目，代辦服務不計入合計）
   const ownSubtotal = ownItems.reduce((sum, item) => sum + (item.amount || 0), 0)
-  const referralOneTimeSubtotal = referralOneTimeItems.reduce((sum, item) => sum + (item.amount || 0), 0)
-  // 非一次性服務不計入合計，只顯示每月金額
-  const subtotal = ownSubtotal  // 只計算自己收款的項目
+  const subtotal = ownSubtotal
   const total = subtotal - (parseFloat(form.discount_amount) || 0)
 
   // 處理提交
@@ -712,13 +710,6 @@ export default function QuoteCreate() {
                         <span className="text-gray-600">${(item.unit_price || 0).toLocaleString()}/月</span>
                       </div>
                     ))}
-                    {/* 小計（只計算一次性） */}
-                    {referralOneTimeItems.length > 0 && (
-                      <div className="flex justify-between pt-1 border-t border-gray-200">
-                        <span className="font-medium">一次性小計</span>
-                        <span className="text-gray-700 font-medium">${referralOneTimeSubtotal.toLocaleString()}</span>
-                      </div>
-                    )}
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
                     * 代辦服務費用於服務完成後另行收取
@@ -862,15 +853,6 @@ export default function QuoteCreate() {
                     </div>
                   ))}
 
-                  {/* 一次性服務小計（只有一次性才顯示） */}
-                  {referralOneTimeItems.length > 0 && (
-                    <div className="flex bg-gray-100">
-                      <div className="flex-1 p-2 text-center font-bold text-gray-700 text-sm">一次性小計</div>
-                      <div className="w-28 p-2 text-right font-bold text-gray-700 text-sm font-mono">
-                        {formatCurrency(referralOneTimeSubtotal)}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 

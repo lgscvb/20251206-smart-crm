@@ -200,10 +200,6 @@ export default function QuotePDF({ data }) {
   const referralOneTimeItems = referralItems.filter(item => item.billing_cycle === 'one_time' || item.unit === '次')
   const referralRecurringItems = referralItems.filter(item => item.billing_cycle !== 'one_time' && item.unit !== '次')
 
-  // 計算金額
-  const ownSubtotal = ownItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
-  const referralOneTimeSubtotal = referralOneTimeItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
-
   // 簽約應付合計（自己收款的項目 + 押金）
   const signTotal = Number(total_amount) + Number(deposit_amount)
 
@@ -299,13 +295,6 @@ export default function QuotePDF({ data }) {
               </View>
             ))}
 
-            {/* 一次性服務小計（只有一次性才顯示） */}
-            {referralOneTimeItems.length > 0 && (
-              <View style={[styles.totalRow, { backgroundColor: '#f5f5f5' }]}>
-                <Text style={[styles.totalLabel, { color: '#666666' }]}>一次性小計</Text>
-                <Text style={[styles.totalAmount, { color: '#666666' }]}>{formatCurrency(referralOneTimeSubtotal)}</Text>
-              </View>
-            )}
           </View>
         )}
 
