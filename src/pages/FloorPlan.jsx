@@ -226,8 +226,9 @@ export default function FloorPlan() {
 
     try {
       // 批次更新座標
+      const floorPlanId = floorPlan?.id || 1
       for (const [posNum, coords] of updates) {
-        await api.patch(`/api/db/floor_positions?position_number=eq.${posNum}&floor_plan_id=eq.1`, {
+        await api.patch(`/api/db/floor_positions?position_number=eq.${posNum}&floor_plan_id=eq.${floorPlanId}`, {
           x: coords.x,
           y: coords.y
         })
@@ -643,19 +644,20 @@ export default function FloorPlan() {
                 onChange={(e) => setContractSearch(e.target.value)}
                 placeholder="輸入客戶名稱或公司名..."
                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-jungle-500"
+                autoFocus
               />
             </div>
           </div>
 
           {/* 搜尋結果 */}
-          {contractSearch.length >= 2 && contractsData?.result && (
+          {contractSearch.length >= 2 && contractsData?.result?.customers && (
             <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg divide-y">
-              {contractsData.result.length === 0 ? (
+              {contractsData.result.customers.length === 0 ? (
                 <div className="p-4 text-center text-gray-500">
                   找不到符合的客戶
                 </div>
               ) : (
-                contractsData.result.map((customer) => (
+                contractsData.result.customers.map((customer) => (
                   <div key={customer.id} className="p-3 hover:bg-gray-50">
                     <div className="flex items-center justify-between">
                       <div>
