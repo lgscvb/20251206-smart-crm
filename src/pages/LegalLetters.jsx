@@ -88,11 +88,16 @@ export default function LegalLetters() {
         branch_name: candidate.branch_name
       })
 
-      if (result.success && result.result?.content) {
+      if (result.success && result.result?.success && result.result?.content) {
         setGeneratedContent(result.result.content)
+      } else {
+        // 顯示錯誤訊息
+        const errorMsg = result.result?.message || '生成失敗，請稍後再試'
+        setGeneratedContent(`【生成失敗】\n${errorMsg}`)
       }
     } catch (error) {
       console.error('生成失敗:', error)
+      setGeneratedContent(`【生成失敗】\n${error.message || '未知錯誤'}`)
     } finally {
       setIsGenerating(false)
     }
@@ -182,11 +187,16 @@ export default function LegalLetters() {
         monthly_rent: contract.monthly_rent
       })
 
-      if (result.success && result.result?.content) {
+      if (result.success && result.result?.success && result.result?.content) {
         setGeneratedContent(result.result.content)
+      } else {
+        // 顯示錯誤訊息
+        const errorMsg = result.result?.message || '生成失敗，請稍後再試'
+        setGeneratedContent(`【生成失敗】\n${errorMsg}`)
       }
     } catch (error) {
       console.error('生成失敗:', error)
+      setGeneratedContent(`【生成失敗】\n${error.message || '未知錯誤'}`)
     } finally {
       setIsGenerating(false)
     }
