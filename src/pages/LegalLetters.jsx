@@ -167,56 +167,73 @@ export default function LegalLetters() {
     setShowStatusModal(true)
   }
 
-  // 從合約生成存證信函
-  const handleGenerateFromContract = async (contract) => {
+  // 從合約生成存證信函（使用固定模板，不呼叫 LLM）
+  const handleGenerateFromContract = (contract) => {
     setSelectedContract(contract)
     setSelectedCandidate(null)
-    setIsGenerating(true)
     setShowCreateModal(true)
 
-    try {
-      // 使用合約資料生成存證信函內容（注意：customers/branches 是巢狀物件）
-      const result = await generateContent.mutateAsync({
-        contract_id: contract.id,
-        customer_name: contract.customers?.name,
-        company_name: contract.customers?.company_name,
-        address: contract.registered_address,
-        contract_number: contract.contract_number,
-        branch_name: contract.branches?.name,
-        service_items: contract.service_items,
-        monthly_rent: contract.monthly_rent
-      })
+    // 使用固定模板，填入合約資料
+    const recipient = contract.customers?.company_name || contract.customers?.name || ''
+    const contractNumber = contract.contract_number || ''
+    const monthlyRent = contract.monthly_rent?.toLocaleString() || '0'
+    const branchName = contract.branches?.name || ''
 
-      if (result.success && result.result?.success && result.result?.content) {
-        setGeneratedContent(result.result.content)
-      } else {
-        // 顯示錯誤訊息
-        const errorMsg = result.result?.message || '生成失敗，請稍後再試'
-        setGeneratedContent(`【生成失敗】\n${errorMsg}`)
-      }
-    } catch (error) {
-      console.error('生成失敗:', error)
-      setGeneratedContent(`【生成失敗】\n${error.message || '未知錯誤'}`)
-    } finally {
-      setIsGenerating(false)
-    }
+    const templateContent = `受文者：${recipient} 公鑒
+
+主旨：違約事項催告函
+
+說明：
+
+一、貴我雙方簽訂租賃合約（合約編號：${contractNumber}），約定由本公司提供營業登記服務，每月租金為新台幣 ${monthlyRent} 元整。
+
+二、惟查貴公司有下列違約情事：
+    【請填寫具體違約事項】
+
+三、茲因貴公司已違反契約義務，本公司特此通知貴公司應於本函送達後十五日內改善前開違約情事。
+
+四、倘貴公司未於前開期限內改善，本公司將依法採取下列措施：
+    (一) 終止租賃契約
+    (二) 請求損害賠償
+    (三) 採取其他法律途徑主張權利
+
+五、懇請貴公司審慎處理，以維護雙方權益，避免訴訟程序之勞費。
+
+此致
+${recipient}
+
+                                        你的空間有限公司
+                                        （Hour Jungle ${branchName}）`
+
+    setGeneratedContent(templateContent)
   }
 
-  // 從合約建立存證信函
+  // 從合約建立存證信函（建立後自動生成 PDF）
   const handleCreateLetterFromContract = async () => {
     if (!selectedContract || !generatedContent) return
 
     try {
-      await createLetter.mutateAsync({
+      // 1. 建立存證信函記錄
+      const createResult = await createLetter.mutateAsync({
         contractId: selectedContract.id,
         content: generatedContent,
         recipientName: selectedContract.customers?.company_name || selectedContract.customers?.name,
         recipientAddress: selectedContract.registered_address
       })
 
+      // 2. 取得新建立的 letter ID，自動生成 PDF
+      const letterId = createResult?.result?.letter?.id
+      if (letterId) {
+        const pdfResult = await generatePdf.mutateAsync(letterId)
+        if (pdfResult.success && pdfResult.result?.pdf_url) {
+          window.open(pdfResult.result.pdf_url, '_blank')
+        }
+      }
+
       setShowCreateModal(false)
       setGeneratedContent('')
       setSelectedContract(null)
+      setActiveTab('pending')  // 切到待處理 tab
       refetchPending()
     } catch (error) {
       console.error('建立失敗:', error)
