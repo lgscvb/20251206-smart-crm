@@ -66,7 +66,9 @@ const INITIAL_CONTRACT_FORM = {
   deposit_amount: '',
   payment_cycle: 'monthly',
   payment_day: new Date().getDate(),  // 預設為當日
-  position_number: ''
+  position_number: '',
+  // PDF 選項
+  show_stamp: true  // 電子用印（預設開啟）
 }
 
 export default function Contracts() {
@@ -162,7 +164,21 @@ export default function Contracts() {
   // 刪除合約 mutation
   const deleteContract = useMutation({
     mutationFn: async (contractId) => {
-      // 1. 先刪除相關的付款記錄
+      // 1. 先清除報價單的 converted_contract_id 外鍵關聯
+      const clearQuotesResponse = await fetch(`/api/db/quotes?converted_contract_id=eq.${contractId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          converted_contract_id: null,
+          status: 'accepted'  // 將狀態改回已接受，因為合約被刪除了
+        })
+      })
+      if (!clearQuotesResponse.ok) {
+        const errorData = await clearQuotesResponse.json().catch(() => ({}))
+        throw new Error(errorData.message || '清除報價單關聯失敗')
+      }
+
+      // 2. 刪除相關的付款記錄
       const deletePaymentsResponse = await fetch(`/api/db/payments?contract_id=eq.${contractId}`, {
         method: 'DELETE'
       })
@@ -171,7 +187,7 @@ export default function Contracts() {
         throw new Error(errorData.message || '刪除付款記錄失敗')
       }
 
-      // 2. 再刪除合約
+      // 3. 刪除合約
       const response = await fetch(`/api/db/contracts?id=eq.${contractId}`, {
         method: 'DELETE'
       })
@@ -184,7 +200,8 @@ export default function Contracts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contracts'] })
       queryClient.invalidateQueries({ queryKey: ['payments'] })
-      addNotification({ type: 'success', message: '合約及相關付款記錄已刪除' })
+      queryClient.invalidateQueries({ queryKey: ['quotes'] })
+      addNotification({ type: 'success', message: '合約已刪除，相關報價單已恢復' })
     },
     onError: (error) => {
       addNotification({ type: 'error', message: `刪除失敗: ${error.message}` })
@@ -317,23 +334,12 @@ export default function Contracts() {
       deposit_amount: contract.deposit || '',
       payment_cycle: contract.payment_cycle || 'monthly',
       payment_day: contract.payment_day || new Date().getDate(),  // 預設當日
-      position_number: contract.position_number || ''
+      position_number: contract.position_number || '',
+      show_stamp: true  // 電子用印預設開啟
     })
     setEditingContract(contract)
     setShowEditModal(true)
   }
-
-  // 從報價單轉換過來時，自動開啟編輯 Modal
-  useEffect(() => {
-    if (location.state?.editContractId && contracts) {
-      const contractToEdit = contracts.find(c => c.id === location.state.editContractId)
-      if (contractToEdit) {
-        openEditModal(contractToEdit)
-        // 清除 location state，避免重新整理時重複開啟
-        window.history.replaceState({}, document.title)
-      }
-    }
-  }, [location.state?.editContractId, contracts])
 
   // 處理編輯合約
   const handleEditContract = (e) => {
@@ -572,6 +578,40 @@ export default function Contracts() {
     customer_id: customerIdFilter ? `eq.${customerIdFilter}` : undefined,
     limit: 99999
   })
+
+  // 從報價單轉換過來時，自動開啟編輯 Modal
+  useEffect(() => {
+    if (location.state?.editContractId && contracts) {
+      const contractToEdit = contracts.find(c => c.id === location.state.editContractId)
+      if (contractToEdit) {
+        // 直接設定表單並開啟 Modal（避免引用 openEditModal 函數）
+        setEditForm({
+          company_name: contractToEdit.company_name || contractToEdit.customers?.company_name || '',
+          representative_name: contractToEdit.representative_name || contractToEdit.customers?.name || '',
+          representative_address: contractToEdit.representative_address || '',
+          id_number: contractToEdit.id_number || '',
+          company_tax_id: contractToEdit.company_tax_id || '',
+          phone: contractToEdit.phone || contractToEdit.customers?.phone || '',
+          email: contractToEdit.email || contractToEdit.customers?.email || '',
+          branch_id: contractToEdit.branch_id || 1,
+          contract_type: contractToEdit.contract_type || 'virtual_office',
+          start_date: contractToEdit.start_date || '',
+          end_date: contractToEdit.end_date || '',
+          original_price: contractToEdit.original_price || '',
+          monthly_rent: contractToEdit.monthly_rent || '',
+          deposit_amount: contractToEdit.deposit || '',
+          payment_cycle: contractToEdit.payment_cycle || 'monthly',
+          payment_day: contractToEdit.payment_day || new Date().getDate(),
+          position_number: contractToEdit.position_number || '',
+          show_stamp: true  // 電子用印預設開啟
+        })
+        setEditingContract(contractToEdit)
+        setShowEditModal(true)
+        // 清除 location state，避免重新整理時重複開啟
+        window.history.replaceState({}, document.title)
+      }
+    }
+  }, [location.state?.editContractId, contracts])
 
   // 所有欄位定義
   const allColumns = [
@@ -1718,36 +1758,115 @@ export default function Contracts() {
             </div>
           </div>
 
+          {/* 電子用印選項 */}
+          <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editForm.show_stamp}
+                onChange={(e) => setEditForm(prev => ({ ...prev, show_stamp: e.target.checked }))}
+                className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              />
+              <div>
+                <span className="font-medium text-purple-900">電子用印</span>
+                <p className="text-sm text-purple-600">勾選後合約 PDF 將自動加蓋公司印章（適用於線上續約客戶）</p>
+              </div>
+            </label>
+          </div>
+
           {/* 按鈕 */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <div className="flex justify-between items-center pt-4 border-t">
+            {/* 左側：下載 PDF */}
             <button
               type="button"
-              onClick={() => {
-                setShowEditModal(false)
-                setEditingContract(null)
-                setEditForm(INITIAL_CONTRACT_FORM)
+              onClick={async () => {
+                if (!editingContract) return
+                try {
+                  const branchInfo = BRANCHES[editingContract.branch_id] || BRANCHES[1]
+                  const pdfData = {
+                    contract_type: editingContract.contract_type,
+                    branch_company_name: branchInfo.company_name,
+                    branch_tax_id: branchInfo.tax_id,
+                    branch_representative: branchInfo.representative,
+                    branch_address: branchInfo.address,
+                    branch_court: branchInfo.court,
+                    branch_id: editingContract.branch_id,
+                    room_number: editingContract.room_number || '',
+                    company_name: editForm.company_name,
+                    representative_name: editForm.representative_name,
+                    representative_address: editForm.representative_address,
+                    id_number: editForm.id_number,
+                    company_tax_id: editForm.company_tax_id,
+                    phone: editForm.phone,
+                    email: editForm.email,
+                    start_date: editForm.start_date,
+                    end_date: editForm.end_date,
+                    periods: calculateMonths(editForm.start_date, editForm.end_date),
+                    original_price: parseFloat(editForm.original_price) || 0,
+                    monthly_rent: parseFloat(editForm.monthly_rent) || 0,
+                    deposit_amount: parseFloat(editForm.deposit_amount) || 0,
+                    payment_day: parseInt(editForm.payment_day) || 8,
+                    show_stamp: editForm.show_stamp
+                  }
+                  let PdfComponent
+                  if (editingContract.contract_type === 'office') {
+                    PdfComponent = OfficePDF
+                  } else if (editingContract.contract_type === 'flex_seat') {
+                    PdfComponent = FlexSeatPDF
+                  } else {
+                    PdfComponent = ContractPDF
+                  }
+                  const blob = await pdf(<PdfComponent data={pdfData} />).toBlob()
+                  const url = URL.createObjectURL(blob)
+                  const link = document.createElement('a')
+                  link.href = url
+                  link.download = `合約_${editingContract.contract_number}.pdf`
+                  document.body.appendChild(link)
+                  link.click()
+                  document.body.removeChild(link)
+                  URL.revokeObjectURL(url)
+                } catch (error) {
+                  console.error('生成合約 PDF 失敗:', error)
+                  alert('生成合約 PDF 失敗: ' + (error.message || '未知錯誤'))
+                }
               }}
-              className="btn-secondary"
+              className="btn-secondary flex items-center gap-2"
             >
-              取消
+              <FileText className="w-4 h-4" />
+              下載合約 PDF
             </button>
-            <button
-              type="submit"
-              disabled={updateContract.isPending}
-              className="btn-primary"
-            >
-              {updateContract.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  更新中...
-                </>
-              ) : (
-                <>
-                  <Pencil className="w-4 h-4 mr-2" />
-                  儲存變更
-                </>
-              )}
-            </button>
+
+            {/* 右側：取消和儲存 */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditModal(false)
+                  setEditingContract(null)
+                  setEditForm(INITIAL_CONTRACT_FORM)
+                }}
+                className="btn-secondary"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={updateContract.isPending}
+                className="btn-primary"
+              >
+                {updateContract.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    更新中...
+                  </>
+                ) : (
+                  <>
+                    <Pencil className="w-4 h-4 mr-2" />
+                    儲存變更
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </Modal>
