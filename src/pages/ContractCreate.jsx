@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { PDFViewer } from '@react-pdf/renderer'
-import { crm } from '../services/api'
+import { crm, db } from '../services/api'
 import useStore from '../store/useStore'
 import ContractPDF from '../components/pdf/ContractPDF'
 import OfficePDF from '../components/pdf/OfficePDF'
@@ -87,7 +88,11 @@ const CONTRACT_TYPES = {
 
 export default function ContractCreate() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const addNotification = useStore((state) => state.addNotification)
+
+  // 從 URL 參數讀取報價單 ID
+  const fromQuoteId = searchParams.get('from_quote')
 
   const [form, setForm] = useState(getInitialForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -96,6 +101,81 @@ export default function ContractCreate() {
   const [depositLocked, setDepositLocked] = useState(true)
   const [showDepositWarning, setShowDepositWarning] = useState(false)
   const [showStamp, setShowStamp] = useState(false) // 電子用印
+  const [quoteLoaded, setQuoteLoaded] = useState(false) // 避免重複載入
+
+  // 從報價單載入資料（如果有 from_quote 參數）
+  const { data: quoteData, isLoading: isLoadingQuote } = useQuery({
+    queryKey: ['quote', fromQuoteId],
+    queryFn: () => db.query('v_quotes', { id: `eq.${fromQuoteId}` }),
+    enabled: !!fromQuoteId,
+    staleTime: 0
+  })
+
+  // 當報價單資料載入後，預填表單
+  useEffect(() => {
+    if (quoteData && quoteData.length > 0 && !quoteLoaded) {
+      const quote = quoteData[0]
+
+      // 計算合約日期
+      const today = new Date()
+      const startDate = quote.proposed_start_date || today.toISOString().split('T')[0]
+      const months = quote.contract_months || 12
+      const endDate = calculateEndDate(startDate, months)
+
+      // 計算月租金和繳費週期：從 items 中找出月租項目（own 項目）
+      let monthlyRent = ''
+      let paymentCycle = 'monthly'  // 預設月繳
+      if (quote.items) {
+        const items = typeof quote.items === 'string' ? JSON.parse(quote.items) : quote.items
+        const ownItems = items.filter(item =>
+          item.revenue_type !== 'referral' &&
+          item.billing_cycle && item.billing_cycle !== 'one_time'
+        )
+        if (ownItems.length > 0) {
+          monthlyRent = ownItems.reduce((sum, item) => sum + (parseFloat(item.unit_price) || 0), 0)
+          // 從主要項目取得繳費週期
+          const mainItem = ownItems[0]
+          if (mainItem.billing_cycle) {
+            paymentCycle = mainItem.billing_cycle
+          }
+        }
+      }
+
+      // 預填表單
+      setForm({
+        company_name: quote.company_name || '',
+        representative_name: quote.customer_name || '',
+        representative_address: '',
+        id_number: '',
+        company_tax_id: '',
+        phone: quote.customer_phone || '',
+        email: quote.customer_email || '',
+        branch_id: quote.branch_id || 1,
+        contract_type: quote.contract_type || 'virtual_office',
+        room_number: '',
+        start_date: startDate,
+        end_date: endDate,
+        contract_months: months,
+        original_price: quote.original_price || DEFAULT_ORIGINAL_PRICE,
+        monthly_rent: monthlyRent,
+        deposit_amount: quote.deposit_amount || DEFAULT_DEPOSIT,
+        payment_cycle: paymentCycle,
+        payment_day: new Date().getDate(),
+        notes: `來源報價單：${quote.quote_number}`
+      })
+
+      // 解鎖原價和押金欄位（因為已從報價單帶入）
+      if (quote.original_price && quote.original_price !== DEFAULT_ORIGINAL_PRICE) {
+        setOriginalPriceLocked(false)
+      }
+      if (quote.deposit_amount && quote.deposit_amount !== DEFAULT_DEPOSIT) {
+        setDepositLocked(false)
+      }
+
+      setQuoteLoaded(true)
+      addNotification({ type: 'info', message: `已從報價單 ${quote.quote_number} 載入資料` })
+    }
+  }, [quoteData, quoteLoaded, addNotification])
 
   // 取得當前合約類型的設定
   const contractTypeConfig = CONTRACT_TYPES[form.contract_type] || CONTRACT_TYPES.virtual_office
@@ -279,8 +359,17 @@ export default function ContractCreate() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">新增合約</h1>
-            <p className="text-sm text-gray-500">填寫合約資料，右側即時預覽</p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-gray-900">新增合約</h1>
+              {fromQuoteId && quoteData?.[0] && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+                  來自報價單 {quoteData[0].quote_number}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-gray-500">
+              {fromQuoteId ? '已從報價單載入資料，請確認後建立合約' : '填寫合約資料，右側即時預覽'}
+            </p>
           </div>
         </div>
         <button
