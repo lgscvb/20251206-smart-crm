@@ -174,18 +174,29 @@ export default function Contracts() {
   // 刪除合約 mutation
   const deleteContract = useMutation({
     mutationFn: async (contractId) => {
-      // 使用 PostgREST API 直接刪除
+      // 1. 先刪除相關的付款記錄
+      const deletePaymentsResponse = await fetch(`/api/db/payments?contract_id=eq.${contractId}`, {
+        method: 'DELETE'
+      })
+      if (!deletePaymentsResponse.ok) {
+        const errorData = await deletePaymentsResponse.json().catch(() => ({}))
+        throw new Error(errorData.message || '刪除付款記錄失敗')
+      }
+
+      // 2. 再刪除合約
       const response = await fetch(`/api/db/contracts?id=eq.${contractId}`, {
         method: 'DELETE'
       })
       if (!response.ok) {
-        throw new Error('刪除失敗')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || '刪除合約失敗')
       }
       return { success: true }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contracts'] })
-      addNotification({ type: 'success', message: '合約已刪除' })
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
+      addNotification({ type: 'success', message: '合約及相關付款記錄已刪除' })
     },
     onError: (error) => {
       addNotification({ type: 'error', message: `刪除失敗: ${error.message}` })
