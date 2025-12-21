@@ -632,13 +632,15 @@ export const legalLetter = {
   },
 
   // 建立存證信函
-  async create(paymentId, content, recipientName, recipientAddress) {
-    return callTool('legal_create_letter', {
-      payment_id: paymentId,
+  async create({ paymentId, contractId, content, recipientName, recipientAddress }) {
+    const params = {
       content,
       recipient_name: recipientName,
       recipient_address: recipientAddress
-    })
+    }
+    if (paymentId) params.payment_id = paymentId
+    if (contractId) params.contract_id = contractId
+    return callTool('legal_create_letter', params)
   },
 
   // 生成 PDF

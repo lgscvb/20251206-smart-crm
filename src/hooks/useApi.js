@@ -587,8 +587,8 @@ export function useCreateLegalLetter() {
   const addNotification = useStore((state) => state.addNotification)
 
   return useMutation({
-    mutationFn: ({ paymentId, content, recipientName, recipientAddress }) =>
-      legalLetter.create(paymentId, content, recipientName, recipientAddress),
+    mutationFn: ({ paymentId, contractId, content, recipientName, recipientAddress }) =>
+      legalLetter.create({ paymentId, contractId, content, recipientName, recipientAddress }),
     onSuccess: (data) => {
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['legal-candidates'] })
