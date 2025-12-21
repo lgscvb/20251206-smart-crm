@@ -154,7 +154,7 @@ export default function Quotes() {
     email: '',
     start_date: '',
     end_date: '',
-    original_price: '',
+    original_price: 3000,
     monthly_rent: '',
     deposit_amount: '',
     payment_cycle: 'monthly',
@@ -310,7 +310,7 @@ export default function Quotes() {
       email: '',
       start_date: '',
       end_date: '',
-      original_price: '',
+      original_price: 3000,
       monthly_rent: '',
       deposit_amount: '',
       payment_cycle: 'monthly',
@@ -350,7 +350,7 @@ export default function Quotes() {
       email: quote.customer_email || '',
       start_date: startDate,
       end_date: endDate.toISOString().split('T')[0],
-      original_price: quote.original_price || '', // 自動帶入報價單的原價
+      original_price: quote.original_price || 3000, // 自動帶入報價單的原價，預設 3000
       monthly_rent: monthlyRent,
       deposit_amount: quote.deposit_amount || '',
       payment_cycle: 'monthly',

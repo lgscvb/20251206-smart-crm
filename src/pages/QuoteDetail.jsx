@@ -76,7 +76,7 @@ export default function QuoteDetail() {
     email: '',
     start_date: '',
     end_date: '',
-    original_price: '',
+    original_price: 3000,
     monthly_rent: '',
     deposit_amount: '',
     payment_cycle: 'monthly',
@@ -191,7 +191,7 @@ export default function QuoteDetail() {
       email: quote.customer_email || '',
       start_date: startDate,
       end_date: endDate.toISOString().split('T')[0],
-      original_price: quote.original_price || '',
+      original_price: quote.original_price || 3000, // 預設 3000
       monthly_rent: monthlyRent,
       deposit_amount: quote.deposit_amount || '',
       payment_cycle: 'monthly',
