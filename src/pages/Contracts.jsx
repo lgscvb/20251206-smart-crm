@@ -112,18 +112,6 @@ export default function Contracts() {
   const addNotification = useStore((state) => state.addNotification)
   const location = useLocation()
 
-  // 從報價單轉換過來時，自動開啟編輯 Modal
-  useEffect(() => {
-    if (location.state?.editContractId && contracts) {
-      const contractToEdit = contracts.find(c => c.id === location.state.editContractId)
-      if (contractToEdit) {
-        openEditModal(contractToEdit)
-        // 清除 location state，避免重新整理時重複開啟
-        window.history.replaceState({}, document.title)
-      }
-    }
-  }, [location.state?.editContractId, contracts])
-
   // 客戶列表（保留供其他功能使用）
   // const { data: customers } = useCustomers({ limit: 500 })
 
@@ -334,6 +322,18 @@ export default function Contracts() {
     setEditingContract(contract)
     setShowEditModal(true)
   }
+
+  // 從報價單轉換過來時，自動開啟編輯 Modal
+  useEffect(() => {
+    if (location.state?.editContractId && contracts) {
+      const contractToEdit = contracts.find(c => c.id === location.state.editContractId)
+      if (contractToEdit) {
+        openEditModal(contractToEdit)
+        // 清除 location state，避免重新整理時重複開啟
+        window.history.replaceState({}, document.title)
+      }
+    }
+  }, [location.state?.editContractId, contracts])
 
   // 處理編輯合約
   const handleEditContract = (e) => {
