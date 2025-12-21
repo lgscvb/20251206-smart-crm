@@ -170,14 +170,14 @@ export default function LegalLetters() {
     setShowCreateModal(true)
 
     try {
-      // 使用合約資料生成存證信函內容
+      // 使用合約資料生成存證信函內容（注意：customers/branches 是巢狀物件）
       const result = await generateContent.mutateAsync({
         contract_id: contract.id,
-        customer_name: contract.customer_name,
-        company_name: contract.company_name,
-        address: contract.legal_address || contract.registered_address,
+        customer_name: contract.customers?.name,
+        company_name: contract.customers?.company_name,
+        address: contract.registered_address,
         contract_number: contract.contract_number,
-        branch_name: contract.branch_name,
+        branch_name: contract.branches?.name,
         service_items: contract.service_items,
         monthly_rent: contract.monthly_rent
       })
@@ -200,8 +200,8 @@ export default function LegalLetters() {
       await createLetter.mutateAsync({
         contractId: selectedContract.id,
         content: generatedContent,
-        recipientName: selectedContract.company_name || selectedContract.customer_name,
-        recipientAddress: selectedContract.legal_address || selectedContract.registered_address
+        recipientName: selectedContract.customers?.company_name || selectedContract.customers?.name,
+        recipientAddress: selectedContract.registered_address
       })
 
       setShowCreateModal(false)
@@ -320,7 +320,7 @@ export default function LegalLetters() {
     }
   ]
 
-  // 合約表格欄位
+  // 合約表格欄位（注意：getContracts 回傳 customers.name、branches.name）
   const contractColumns = [
     {
       key: 'contract_number',
@@ -330,13 +330,13 @@ export default function LegalLetters() {
       )
     },
     {
-      key: 'customer_name',
+      key: 'customers',
       label: '客戶',
       render: (row) => (
         <div>
-          <div className="font-medium">{row.customer_name}</div>
-          {row.company_name && (
-            <div className="text-sm text-gray-500">{row.company_name}</div>
+          <div className="font-medium">{row.customers?.name}</div>
+          {row.customers?.company_name && (
+            <div className="text-sm text-gray-500">{row.customers.company_name}</div>
           )}
         </div>
       )
@@ -381,8 +381,9 @@ export default function LegalLetters() {
       }
     },
     {
-      key: 'branch_name',
-      label: '分館'
+      key: 'branches',
+      label: '分館',
+      render: (row) => row.branches?.name || '-'
     }
   ]
 
@@ -608,7 +609,7 @@ export default function LegalLetters() {
                 columns={contractColumns}
                 actions={contractActions}
                 searchable
-                searchKeys={['contract_number', 'customer_name', 'company_name']}
+                searchKeys={['contract_number', 'customers.name', 'customers.company_name']}
               />
             )}
           </div>
@@ -637,7 +638,7 @@ export default function LegalLetters() {
                   <span className="text-gray-500">姓名：</span>
                   {selectedCandidate
                     ? (selectedCandidate.company_name || selectedCandidate.customer_name)
-                    : (selectedContract.company_name || selectedContract.customer_name)
+                    : (selectedContract.customers?.company_name || selectedContract.customers?.name)
                   }
                 </div>
                 <div>
@@ -659,7 +660,7 @@ export default function LegalLetters() {
                   <span className="text-gray-500">地址：</span>
                   {selectedCandidate
                     ? (selectedCandidate.legal_address || '（未設定）')
-                    : (selectedContract.legal_address || selectedContract.registered_address || '（未設定）')
+                    : (selectedContract.registered_address || '（未設定）')
                   }
                 </div>
                 {selectedContract && (
