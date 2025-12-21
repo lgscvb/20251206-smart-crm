@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useContracts, useCustomers } from '../hooks/useApi'
 import { crm, callTool } from '../services/api'
@@ -112,7 +112,6 @@ export default function Contracts() {
 
   const queryClient = useQueryClient()
   const addNotification = useStore((state) => state.addNotification)
-  const location = useLocation()
 
   // 客戶列表（保留供其他功能使用）
   // const { data: customers } = useCustomers({ limit: 500 })
@@ -579,40 +578,6 @@ export default function Contracts() {
     limit: 99999
   })
 
-  // 從報價單轉換過來時，自動開啟編輯 Modal
-  useEffect(() => {
-    if (location.state?.editContractId && contracts) {
-      const contractToEdit = contracts.find(c => c.id === location.state.editContractId)
-      if (contractToEdit) {
-        // 直接設定表單並開啟 Modal（避免引用 openEditModal 函數）
-        setEditForm({
-          company_name: contractToEdit.company_name || contractToEdit.customers?.company_name || '',
-          representative_name: contractToEdit.representative_name || contractToEdit.customers?.name || '',
-          representative_address: contractToEdit.representative_address || '',
-          id_number: contractToEdit.id_number || '',
-          company_tax_id: contractToEdit.company_tax_id || '',
-          phone: contractToEdit.phone || contractToEdit.customers?.phone || '',
-          email: contractToEdit.email || contractToEdit.customers?.email || '',
-          branch_id: contractToEdit.branch_id || 1,
-          contract_type: contractToEdit.contract_type || 'virtual_office',
-          start_date: contractToEdit.start_date || '',
-          end_date: contractToEdit.end_date || '',
-          original_price: contractToEdit.original_price || 3000,
-          monthly_rent: contractToEdit.monthly_rent || '',
-          deposit_amount: contractToEdit.deposit || '',
-          payment_cycle: contractToEdit.payment_cycle || 'monthly',
-          payment_day: contractToEdit.payment_day || new Date().getDate(),
-          position_number: contractToEdit.position_number || '',
-          show_stamp: true  // 電子用印預設開啟
-        })
-        setEditingContract(contractToEdit)
-        setShowEditModal(true)
-        // 清除 location state，避免重新整理時重複開啟
-        window.history.replaceState({}, document.title)
-      }
-    }
-  }, [location.state?.editContractId, contracts])
-
   // 所有欄位定義
   const allColumns = [
     {
@@ -662,7 +627,12 @@ export default function Contracts() {
       cell: (row) => {
         const types = {
           virtual_office: '營業登記',
+          custom: '營業登記',  // 從報價單轉換的合約
+          office: '辦公室租賃',
+          flex_seat: '自由座',
           shared_space: '共享空間',
+          coworking_fixed: '固定座位',
+          coworking_flexible: '彈性座位',
           meeting_room: '會議室',
           mailbox: '郵件代收'
         }
