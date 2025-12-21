@@ -323,16 +323,16 @@ export default function LegalLetters() {
   // 合約表格欄位（注意：getContracts 回傳 customers.name、branches.name）
   const contractColumns = [
     {
-      key: 'contract_number',
-      label: '合約編號',
-      render: (row) => (
+      header: '合約編號',
+      accessor: 'contract_number',
+      cell: (row) => (
         <span className="font-mono text-sm">{row.contract_number}</span>
       )
     },
     {
-      key: 'customers',
-      label: '客戶',
-      render: (row) => (
+      header: '客戶',
+      accessor: 'customers',
+      cell: (row) => (
         <div>
           <div className="font-medium">{row.customers?.name}</div>
           {row.customers?.company_name && (
@@ -342,25 +342,25 @@ export default function LegalLetters() {
       )
     },
     {
-      key: 'service_items',
-      label: '服務項目',
-      render: (row) => (
+      header: '服務項目',
+      accessor: 'service_items',
+      cell: (row) => (
         <div className="text-sm">{row.service_items || '-'}</div>
       )
     },
     {
-      key: 'monthly_rent',
-      label: '月租金',
-      render: (row) => (
+      header: '月租金',
+      accessor: 'monthly_rent',
+      cell: (row) => (
         <span className="font-medium">
           ${row.monthly_rent?.toLocaleString() || 0}
         </span>
       )
     },
     {
-      key: 'status',
-      label: '狀態',
-      render: (row) => {
+      header: '狀態',
+      accessor: 'status',
+      cell: (row) => {
         const statusColors = {
           active: 'success',
           pending: 'warning',
@@ -381,22 +381,27 @@ export default function LegalLetters() {
       }
     },
     {
-      key: 'branches',
-      label: '分館',
-      render: (row) => row.branches?.name || '-'
+      header: '分館',
+      accessor: 'branches',
+      cell: (row) => row.branches?.name || '-'
+    },
+    {
+      header: '操作',
+      accessor: 'id',
+      cell: (row) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            handleGenerateFromContract(row)
+          }}
+          className="btn btn-sm btn-primary flex items-center gap-1"
+        >
+          <Plus className="w-4 h-4" />
+          建立存證信函
+        </button>
+      )
     }
   ]
-
-  // 合約操作按鈕
-  const contractActions = (row) => (
-    <button
-      onClick={() => handleGenerateFromContract(row)}
-      className="btn btn-sm btn-primary flex items-center gap-1"
-    >
-      <Plus className="w-4 h-4" />
-      建立存證信函
-    </button>
-  )
 
   // 候選客戶操作按鈕
   const candidateActions = (row) => (
@@ -607,9 +612,7 @@ export default function LegalLetters() {
               <DataTable
                 data={contracts}
                 columns={contractColumns}
-                actions={contractActions}
                 searchable
-                searchKeys={['contract_number', 'customers.name', 'customers.company_name']}
               />
             )}
           </div>
