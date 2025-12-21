@@ -5,7 +5,8 @@ import {
   useGenerateLegalContent,
   useCreateLegalLetter,
   useGenerateLegalPdf,
-  useUpdateLegalStatus
+  useUpdateLegalStatus,
+  useContracts
 } from '../hooks/useApi'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
@@ -20,7 +21,9 @@ import {
   Eye,
   Edit3,
   Truck,
-  XCircle
+  XCircle,
+  Plus,
+  Building2
 } from 'lucide-react'
 
 // 狀態標籤
@@ -44,6 +47,7 @@ export default function LegalLetters() {
   const [showContentModal, setShowContentModal] = useState(false)
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [selectedCandidate, setSelectedCandidate] = useState(null)
+  const [selectedContract, setSelectedContract] = useState(null)
   const [selectedLetter, setSelectedLetter] = useState(null)
   const [generatedContent, setGeneratedContent] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -57,6 +61,7 @@ export default function LegalLetters() {
   // Queries
   const { data: candidates = [], isLoading: candidatesLoading, refetch: refetchCandidates } = useLegalLetterCandidates()
   const { data: pendingLetters = [], isLoading: pendingLoading, refetch: refetchPending } = useLegalLetterPending()
+  const { data: contracts = [], isLoading: contractsLoading } = useContracts()
 
   // Mutations
   const generateContent = useGenerateLegalContent()
@@ -155,6 +160,57 @@ export default function LegalLetters() {
     setSelectedLetter(letter)
     setStatusForm({ ...statusForm, status: newStatus })
     setShowStatusModal(true)
+  }
+
+  // 從合約生成存證信函
+  const handleGenerateFromContract = async (contract) => {
+    setSelectedContract(contract)
+    setSelectedCandidate(null)
+    setIsGenerating(true)
+    setShowCreateModal(true)
+
+    try {
+      // 使用合約資料生成存證信函內容
+      const result = await generateContent.mutateAsync({
+        contract_id: contract.id,
+        customer_name: contract.customer_name,
+        company_name: contract.company_name,
+        address: contract.legal_address || contract.registered_address,
+        contract_number: contract.contract_number,
+        branch_name: contract.branch_name,
+        service_items: contract.service_items,
+        monthly_rent: contract.monthly_rent
+      })
+
+      if (result.success && result.result?.content) {
+        setGeneratedContent(result.result.content)
+      }
+    } catch (error) {
+      console.error('生成失敗:', error)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  // 從合約建立存證信函
+  const handleCreateLetterFromContract = async () => {
+    if (!selectedContract || !generatedContent) return
+
+    try {
+      await createLetter.mutateAsync({
+        contractId: selectedContract.id,
+        content: generatedContent,
+        recipientName: selectedContract.company_name || selectedContract.customer_name,
+        recipientAddress: selectedContract.legal_address || selectedContract.registered_address
+      })
+
+      setShowCreateModal(false)
+      setGeneratedContent('')
+      setSelectedContract(null)
+      refetchPending()
+    } catch (error) {
+      console.error('建立失敗:', error)
+    }
   }
 
   // 候選客戶表格欄位
@@ -263,6 +319,83 @@ export default function LegalLetters() {
       render: (row) => new Date(row.created_at).toLocaleDateString('zh-TW')
     }
   ]
+
+  // 合約表格欄位
+  const contractColumns = [
+    {
+      key: 'contract_number',
+      label: '合約編號',
+      render: (row) => (
+        <span className="font-mono text-sm">{row.contract_number}</span>
+      )
+    },
+    {
+      key: 'customer_name',
+      label: '客戶',
+      render: (row) => (
+        <div>
+          <div className="font-medium">{row.customer_name}</div>
+          {row.company_name && (
+            <div className="text-sm text-gray-500">{row.company_name}</div>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'service_items',
+      label: '服務項目',
+      render: (row) => (
+        <div className="text-sm">{row.service_items || '-'}</div>
+      )
+    },
+    {
+      key: 'monthly_rent',
+      label: '月租金',
+      render: (row) => (
+        <span className="font-medium">
+          ${row.monthly_rent?.toLocaleString() || 0}
+        </span>
+      )
+    },
+    {
+      key: 'status',
+      label: '狀態',
+      render: (row) => {
+        const statusColors = {
+          active: 'success',
+          pending: 'warning',
+          expired: 'default',
+          terminated: 'danger'
+        }
+        const statusLabels = {
+          active: '生效中',
+          pending: '待簽約',
+          expired: '已到期',
+          terminated: '已終止'
+        }
+        return (
+          <StatusBadge status={statusColors[row.status] || 'default'}>
+            {statusLabels[row.status] || row.status}
+          </StatusBadge>
+        )
+      }
+    },
+    {
+      key: 'branch_name',
+      label: '分館'
+    }
+  ]
+
+  // 合約操作按鈕
+  const contractActions = (row) => (
+    <button
+      onClick={() => handleGenerateFromContract(row)}
+      className="btn btn-sm btn-primary flex items-center gap-1"
+    >
+      <Plus className="w-4 h-4" />
+      建立存證信函
+    </button>
+  )
 
   // 候選客戶操作按鈕
   const candidateActions = (row) => (
@@ -377,6 +510,13 @@ export default function LegalLetters() {
             <Badge color="info" className="ml-2">{pendingLetters.length}</Badge>
           )}
         </button>
+        <button
+          className={`tab ${activeTab === 'contracts' ? 'tab-active' : ''}`}
+          onClick={() => setActiveTab('contracts')}
+        >
+          <Building2 className="w-4 h-4 mr-2" />
+          手動建立
+        </button>
       </div>
 
       {/* 候選客戶列表 */}
@@ -441,6 +581,40 @@ export default function LegalLetters() {
         </div>
       )}
 
+      {/* 合約列表 - 手動建立 */}
+      {activeTab === 'contracts' && (
+        <div className="card bg-base-100 shadow-xl">
+          <div className="card-body">
+            <h2 className="card-title">
+              <Building2 className="w-5 h-5 text-primary" />
+              從合約建立存證信函
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              選擇任意合約，直接生成存證信函（不受逾期天數或催繳次數限制）
+            </p>
+
+            {contractsLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : contracts.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Building2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>目前沒有合約資料</p>
+              </div>
+            ) : (
+              <DataTable
+                data={contracts}
+                columns={contractColumns}
+                actions={contractActions}
+                searchable
+                searchKeys={['contract_number', 'customer_name', 'company_name']}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 建立存證信函 Modal */}
       <Modal
         open={showCreateModal}
@@ -448,11 +622,12 @@ export default function LegalLetters() {
           setShowCreateModal(false)
           setGeneratedContent('')
           setSelectedCandidate(null)
+          setSelectedContract(null)
         }}
         title="建立存證信函"
         size="lg"
       >
-        {selectedCandidate && (
+        {(selectedCandidate || selectedContract) && (
           <div className="space-y-4">
             {/* 客戶資訊 */}
             <div className="bg-gray-50 p-4 rounded-lg">
@@ -460,18 +635,39 @@ export default function LegalLetters() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <span className="text-gray-500">姓名：</span>
-                  {selectedCandidate.company_name || selectedCandidate.customer_name}
+                  {selectedCandidate
+                    ? (selectedCandidate.company_name || selectedCandidate.customer_name)
+                    : (selectedContract.company_name || selectedContract.customer_name)
+                  }
                 </div>
                 <div>
-                  <span className="text-gray-500">逾期金額：</span>
-                  <span className="text-red-600 font-semibold">
-                    ${selectedCandidate.overdue_amount?.toLocaleString()}
-                  </span>
+                  {selectedCandidate ? (
+                    <>
+                      <span className="text-gray-500">逾期金額：</span>
+                      <span className="text-red-600 font-semibold">
+                        ${selectedCandidate.overdue_amount?.toLocaleString()}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-gray-500">合約編號：</span>
+                      <span className="font-mono">{selectedContract.contract_number}</span>
+                    </>
+                  )}
                 </div>
                 <div className="col-span-2">
                   <span className="text-gray-500">地址：</span>
-                  {selectedCandidate.legal_address || '（未設定）'}
+                  {selectedCandidate
+                    ? (selectedCandidate.legal_address || '（未設定）')
+                    : (selectedContract.legal_address || selectedContract.registered_address || '（未設定）')
+                  }
                 </div>
+                {selectedContract && (
+                  <div className="col-span-2">
+                    <span className="text-gray-500">月租金：</span>
+                    <span className="font-medium">${selectedContract.monthly_rent?.toLocaleString() || 0}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -502,13 +698,14 @@ export default function LegalLetters() {
                   setShowCreateModal(false)
                   setGeneratedContent('')
                   setSelectedCandidate(null)
+                  setSelectedContract(null)
                 }}
                 className="btn btn-ghost"
               >
                 取消
               </button>
               <button
-                onClick={handleCreateLetter}
+                onClick={selectedCandidate ? handleCreateLetter : handleCreateLetterFromContract}
                 className="btn btn-primary"
                 disabled={!generatedContent || createLetter.isPending}
               >

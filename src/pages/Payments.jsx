@@ -134,6 +134,10 @@ export default function Payments() {
       reference: paymentForm.reference || null,
       paidAt: paymentForm.paid_at
     })
+
+    // 保存 payment_id，關閉 Modal 後導航到發票頁面
+    const paymentId = selectedPayment.id
+
     setShowPayModal(false)
     setSelectedPayment(null)
     setPaymentForm({
@@ -143,6 +147,9 @@ export default function Payments() {
     })
     refetchDue()
     refetchOverdue()
+
+    // 導航到發票頁面，自動開啟開立發票 Modal
+    navigate(`/invoices?payment_id=${paymentId}`)
   }
 
   const handleSendReminder = async () => {

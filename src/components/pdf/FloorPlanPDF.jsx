@@ -255,7 +255,7 @@ export default function FloorPlanPDF({ data }) {
                 {row.left?.position_number || ''}
               </Text>
               <Text style={[styles.colName, styles.tdText]}>
-                {truncate(row.left?.customer_name, 8)}
+                {truncate(row.left?.contact_name, 8)}
               </Text>
               <Text style={[styles.colCompany, styles.tdText]}>
                 {truncate(row.left?.company_name, 12)}
@@ -265,7 +265,7 @@ export default function FloorPlanPDF({ data }) {
                 {row.right?.position_number || ''}
               </Text>
               <Text style={[styles.colName, styles.tdText]}>
-                {truncate(row.right?.customer_name, 8)}
+                {truncate(row.right?.contact_name, 8)}
               </Text>
               <Text style={[styles.colCompany, { ...styles.tdText, borderRightWidth: 0 }]}>
                 {truncate(row.right?.company_name, 12)}

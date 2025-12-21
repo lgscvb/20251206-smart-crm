@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { callTool, db } from '../services/api'
 import DataTable from '../components/DataTable'
@@ -26,6 +27,8 @@ const INVOICE_STATUS = {
 }
 
 export default function Invoices() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const addNotification = useStore((state) => state.addNotification)
   const [activeTab, setActiveTab] = useState('list') // list, pending, stats
@@ -40,11 +43,41 @@ export default function Invoices() {
   const [showAllowanceModal, setShowAllowanceModal] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState(null)
 
+  // 處理 URL 參數（從收款頁面跳轉過來）
+  const paymentIdFromUrl = searchParams.get('payment_id')
+
   // 取得分館列表
   const { data: branches = [] } = useQuery({
     queryKey: ['branches'],
     queryFn: () => db.getBranches()
   })
+
+  // 如果有 URL 參數 payment_id，查詢該筆 payment 資料
+  const { data: paymentFromUrl } = useQuery({
+    queryKey: ['payment-for-invoice', paymentIdFromUrl],
+    queryFn: async () => {
+      const response = await db.query('payments', {
+        id: `eq.${paymentIdFromUrl}`,
+        select: 'id,customer_id,branch_id,payment_period,amount,due_date,paid_at,payment_method,notes,invoice_number,invoice_date,invoice_status,customer:customers(name,company_name,company_tax_id),branch:branches(name)'
+      })
+      return response?.[0] || null
+    },
+    enabled: !!paymentIdFromUrl
+  })
+
+  // 當從 URL 載入的 payment 資料準備好，自動開啟開立發票 Modal
+  useEffect(() => {
+    if (paymentFromUrl && !paymentFromUrl.invoice_number) {
+      setSelectedPayment(paymentFromUrl)
+      setShowCreateModal(true)
+      // 清除 URL 參數，避免重複開啟
+      setSearchParams({})
+    } else if (paymentFromUrl && paymentFromUrl.invoice_number) {
+      // 已經開過發票了，顯示提示
+      addNotification({ type: 'info', message: `此筆繳費已開立發票：${paymentFromUrl.invoice_number}` })
+      setSearchParams({})
+    }
+  }, [paymentFromUrl, setSearchParams, addNotification])
 
   // 取得發票列表（已付款的繳費記錄）
   const { data: invoices = [], isLoading, refetch } = useQuery({
