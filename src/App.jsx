@@ -24,6 +24,7 @@ import DataValidation from './pages/DataValidation'
 import Bookings from './pages/Bookings'
 import FloorPlan from './pages/FloorPlan'
 import ContractCreate from './pages/ContractCreate'
+import ServicePlans from './pages/ServicePlans'
 
 function App() {
   return (
@@ -57,6 +58,7 @@ function App() {
         <Route path="bookings" element={<Bookings />} />
         <Route path="floor-plan" element={<FloorPlan />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="settings/service-plans" element={<ServicePlans />} />
       </Route>
     </Routes>
   )

@@ -22,7 +22,8 @@ import {
   FileSignature,
   Scale,
   CalendarDays,
-  Map
+  Map,
+  Package
 } from 'lucide-react'
 import useStore from '../store/useStore'
 import { useBranches } from '../hooks/useApi'
@@ -43,6 +44,7 @@ const navigation = [
   { name: '資料驗證', href: '/data-validation', icon: ShieldCheck },
   { name: '潛客管理', href: '/prospects', icon: UserPlus },
   { name: '客戶管理', href: '/customers', icon: Users },
+  { name: '價格設定', href: '/settings/service-plans', icon: Package },
 ]
 
 export default function Layout() {
