@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePaymentsDue, useOverdueDetails, usePaymentsHistory, useRecordPayment, useUndoPayment, useSendPaymentReminder } from '../hooks/useApi'
+import { useModal } from '../hooks/useModal'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import Badge, { StatusBadge } from '../components/Badge'
@@ -58,10 +59,14 @@ const PAID_COLUMNS = {
 export default function Payments() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('due')
-  const [showPayModal, setShowPayModal] = useState(false)
-  const [showReminderModal, setShowReminderModal] = useState(false)
-  const [showUndoModal, setShowUndoModal] = useState(false)
-  const [selectedPayment, setSelectedPayment] = useState(null)
+
+  // ==========================================================================
+  // 統一 Modal 狀態管理（解決 7 Modal 問題）
+  // modal.open('pay', payment) / modal.isOpen('pay') / modal.getData()
+  // ==========================================================================
+  const modal = useModal()
+
+  // 表單狀態（保留，因為需要在 Modal 關閉後重置）
   const [paymentForm, setPaymentForm] = useState({
     payment_method: 'transfer',
     reference: '',
@@ -70,27 +75,29 @@ export default function Payments() {
   const [undoReason, setUndoReason] = useState('')
   const [reminderMessage, setReminderMessage] = useState('')
   const [pageSize, setPageSize] = useState(15)
+  const [waiveNotes, setWaiveNotes] = useState('')
   const [showColumnPicker, setShowColumnPicker] = useState(false)
 
-  // 刪除相關狀態
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [deletingPayment, setDeletingPayment] = useState(null)
+  // 非同步操作 loading 狀態
   const [deleteLoading, setDeleteLoading] = useState(false)
-
-  // 免收相關狀態
-  const [showWaiveModal, setShowWaiveModal] = useState(false)
-  const [waivingPayment, setWaivingPayment] = useState(null)
   const [waiveLoading, setWaiveLoading] = useState(false)
-  const [waiveNotes, setWaiveNotes] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [generateResult, setGenerateResult] = useState(null)
 
-  // 生成待繳記錄相關狀態
-  const [showGenerateModal, setShowGenerateModal] = useState(false)
+  // 生成待繳記錄的月份
   const [generatePeriod, setGeneratePeriod] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
-  const [generating, setGenerating] = useState(false)
-  const [generateResult, setGenerateResult] = useState(null)
+
+  // 便捷存取當前 Modal 資料
+  const selectedPayment = useMemo(() => {
+    const type = modal.currentType
+    if (['pay', 'reminder', 'undo', 'delete', 'waive'].includes(type)) {
+      return modal.currentData
+    }
+    return null
+  }, [modal.currentType, modal.currentData])
 
   // 應收款欄位狀態
   const [dueVisibleColumns, setDueVisibleColumns] = useState(() => {
@@ -138,8 +145,7 @@ export default function Payments() {
     // 保存 payment_id，關閉 Modal 後導航到發票頁面
     const paymentId = selectedPayment.id
 
-    setShowPayModal(false)
-    setSelectedPayment(null)
+    modal.close()
     setPaymentForm({
       payment_method: 'transfer',
       reference: '',
@@ -159,8 +165,7 @@ export default function Payments() {
       amount: selectedPayment.total_due || selectedPayment.amount,
       dueDate: selectedPayment.due_date
     })
-    setShowReminderModal(false)
-    setSelectedPayment(null)
+    modal.close()
   }
 
   const handleUndoPayment = async () => {
@@ -169,8 +174,7 @@ export default function Payments() {
       paymentId: selectedPayment.id,
       reason: undoReason.trim()
     })
-    setShowUndoModal(false)
-    setSelectedPayment(null)
+    modal.close()
     setUndoReason('')
     refetchPaid()
     refetchDue()
@@ -178,12 +182,11 @@ export default function Payments() {
 
   // 刪除繳費記錄
   const handleDeletePayment = async () => {
-    if (!deletingPayment) return
+    if (!selectedPayment) return
     setDeleteLoading(true)
     try {
-      await api.delete(`/api/db/payments?id=eq.${deletingPayment.id}`)
-      setShowDeleteModal(false)
-      setDeletingPayment(null)
+      await api.delete(`/api/db/payments?id=eq.${selectedPayment.id}`)
+      modal.close()
       // 重新整理所有列表
       refetchDue()
       refetchOverdue()
@@ -198,15 +201,14 @@ export default function Payments() {
 
   // 標記為免收
   const handleWaivePayment = async () => {
-    if (!waivingPayment) return
+    if (!selectedPayment) return
     setWaiveLoading(true)
     try {
-      await api.patch(`/api/db/payments?id=eq.${waivingPayment.id}`, {
+      await api.patch(`/api/db/payments?id=eq.${selectedPayment.id}`, {
         payment_status: 'waived',
         notes: waiveNotes || '免收'
       })
-      setShowWaiveModal(false)
-      setWaivingPayment(null)
+      modal.close()
       setWaiveNotes('')
       // 重新整理所有列表
       refetchDue()
@@ -311,8 +313,7 @@ export default function Payments() {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              setSelectedPayment(row)
-              setShowPayModal(true)
+              modal.open('pay', row)
             }}
             className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
             title="記錄繳費"
@@ -323,10 +324,9 @@ export default function Payments() {
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                setSelectedPayment(row)
                 const defaultMsg = `您好，提醒您 ${row.payment_period} 的租金 $${(row.total_due || row.amount || 0).toLocaleString()} 已到期，請儘速繳納。如有疑問請與我們聯繫。`
                 setReminderMessage(defaultMsg)
-                setShowReminderModal(true)
+                modal.open('reminder', row)
               }}
               className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
               title="發送 LINE 提醒"
@@ -337,8 +337,7 @@ export default function Payments() {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              setWaivingPayment(row)
-              setShowWaiveModal(true)
+              modal.open('waive', row)
             }}
             className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
             title="免收"
@@ -348,8 +347,7 @@ export default function Payments() {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              setDeletingPayment(row)
-              setShowDeleteModal(true)
+              modal.open('delete', row)
             }}
             className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="刪除"
@@ -460,8 +458,7 @@ export default function Payments() {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              setSelectedPayment(row)
-              setShowPayModal(true)
+              modal.open('pay', row)
             }}
             className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
             title="記錄繳費"
@@ -472,10 +469,9 @@ export default function Payments() {
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                setSelectedPayment(row)
                 const defaultMsg = `您好，提醒您 ${row.payment_period} 的租金 $${(row.total_due || row.amount || 0).toLocaleString()} 已逾期 ${row.days_overdue} 天，請儘速繳納。如有任何問題請與我們聯繫。`
                 setReminderMessage(defaultMsg)
-                setShowReminderModal(true)
+                modal.open('reminder', row)
               }}
               className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
               title="發送催繳"
@@ -486,8 +482,7 @@ export default function Payments() {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              setWaivingPayment(row)
-              setShowWaiveModal(true)
+              modal.open('waive', row)
             }}
             className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
             title="免收"
@@ -497,8 +492,7 @@ export default function Payments() {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              setDeletingPayment(row)
-              setShowDeleteModal(true)
+              modal.open('delete', row)
             }}
             className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="刪除"
@@ -581,8 +575,7 @@ export default function Payments() {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              setSelectedPayment(row)
-              setShowUndoModal(true)
+              modal.open('undo', row)
             }}
             className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
             title="撤銷繳費"
@@ -592,8 +585,7 @@ export default function Payments() {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              setDeletingPayment(row)
-              setShowDeleteModal(true)
+              modal.open('delete', row)
             }}
             className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="刪除"
@@ -786,7 +778,7 @@ export default function Payments() {
           <button
             onClick={() => {
               setGenerateResult(null)
-              setShowGenerateModal(true)
+              modal.open('generate')
             }}
             className="btn-primary"
           >
@@ -840,17 +832,14 @@ export default function Payments() {
 
       {/* 記錄繳費 Modal */}
       <Modal
-        open={showPayModal}
-        onClose={() => {
-          setShowPayModal(false)
-          setSelectedPayment(null)
-        }}
+        open={modal.isOpen('pay')}
+        onClose={modal.close}
         title="記錄繳費"
         size="sm"
         footer={
           <>
             <button
-              onClick={() => setShowPayModal(false)}
+              onClick={modal.close}
               className="btn-secondary"
             >
               取消
@@ -931,17 +920,14 @@ export default function Payments() {
 
       {/* 發送提醒 Modal */}
       <Modal
-        open={showReminderModal}
-        onClose={() => {
-          setShowReminderModal(false)
-          setSelectedPayment(null)
-        }}
+        open={modal.isOpen('reminder')}
+        onClose={modal.close}
         title="發送 LINE 催繳通知"
         size="sm"
         footer={
           <>
             <button
-              onClick={() => setShowReminderModal(false)}
+              onClick={modal.close}
               className="btn-secondary"
             >
               取消
@@ -985,10 +971,9 @@ export default function Payments() {
 
       {/* 撤銷繳費 Modal */}
       <Modal
-        open={showUndoModal}
+        open={modal.isOpen('undo')}
         onClose={() => {
-          setShowUndoModal(false)
-          setSelectedPayment(null)
+          modal.close()
           setUndoReason('')
         }}
         title="撤銷繳費記錄"
@@ -997,8 +982,7 @@ export default function Payments() {
           <>
             <button
               onClick={() => {
-                setShowUndoModal(false)
-                setSelectedPayment(null)
+                modal.close()
                 setUndoReason('')
               }}
               className="btn-secondary"
@@ -1057,10 +1041,10 @@ export default function Payments() {
 
       {/* 生成待繳記錄 Modal */}
       <Modal
-        open={showGenerateModal}
+        open={modal.isOpen('generate')}
         onClose={() => {
           if (!generating) {
-            setShowGenerateModal(false)
+            modal.close()
             setGenerateResult(null)
           }
         }}
@@ -1070,7 +1054,7 @@ export default function Payments() {
           generateResult && !generateResult.error ? (
             <button
               onClick={() => {
-                setShowGenerateModal(false)
+                modal.close()
                 setGenerateResult(null)
               }}
               className="btn-primary"
@@ -1081,7 +1065,7 @@ export default function Payments() {
             <>
               <button
                 onClick={() => {
-                  setShowGenerateModal(false)
+                  modal.close()
                   setGenerateResult(null)
                 }}
                 disabled={generating}
@@ -1177,11 +1161,10 @@ export default function Payments() {
 
       {/* 刪除確認 Modal */}
       <Modal
-        open={showDeleteModal}
+        open={modal.isOpen('delete')}
         onClose={() => {
           if (!deleteLoading) {
-            setShowDeleteModal(false)
-            setDeletingPayment(null)
+            modal.close()
           }
         }}
         title="確認刪除"
@@ -1189,10 +1172,7 @@ export default function Payments() {
         footer={
           <>
             <button
-              onClick={() => {
-                setShowDeleteModal(false)
-                setDeletingPayment(null)
-              }}
+              onClick={modal.close}
               disabled={deleteLoading}
               className="btn-secondary"
             >
@@ -1209,7 +1189,7 @@ export default function Payments() {
           </>
         }
       >
-        {deletingPayment && (
+        {selectedPayment && modal.isOpen('delete') && (
           <div className="space-y-4">
             <div className="p-4 bg-red-50 rounded-lg border border-red-200">
               <div className="flex items-start gap-3">
@@ -1225,17 +1205,17 @@ export default function Payments() {
 
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="font-medium">
-                {deletingPayment.customer_name || deletingPayment.customer?.name || '未知客戶'}
+                {selectedPayment.customer_name || selectedPayment.customer?.name || '未知客戶'}
               </p>
               <p className="text-sm text-gray-500">
-                {deletingPayment.payment_period} · {deletingPayment.branch_name || deletingPayment.branch?.name || '-'}
+                {selectedPayment.payment_period} · {selectedPayment.branch_name || selectedPayment.branch?.name || '-'}
               </p>
               <p className="text-xl font-bold text-gray-700 mt-2">
-                ${(deletingPayment.total_due || deletingPayment.amount || 0).toLocaleString()}
+                ${(selectedPayment.total_due || selectedPayment.amount || 0).toLocaleString()}
               </p>
               <p className="text-xs text-gray-400 mt-1">
-                狀態：{deletingPayment.payment_status === 'paid' ? '已付款' :
-                      deletingPayment.payment_status === 'overdue' ? '逾期' : '待繳'}
+                狀態：{selectedPayment.payment_status === 'paid' ? '已付款' :
+                      selectedPayment.payment_status === 'overdue' ? '逾期' : '待繳'}
               </p>
             </div>
           </div>
@@ -1244,11 +1224,10 @@ export default function Payments() {
 
       {/* 免收確認 Modal */}
       <Modal
-        open={showWaiveModal}
+        open={modal.isOpen('waive')}
         onClose={() => {
           if (!waiveLoading) {
-            setShowWaiveModal(false)
-            setWaivingPayment(null)
+            modal.close()
             setWaiveNotes('')
           }
         }}
@@ -1258,8 +1237,7 @@ export default function Payments() {
           <>
             <button
               onClick={() => {
-                setShowWaiveModal(false)
-                setWaivingPayment(null)
+                modal.close()
                 setWaiveNotes('')
               }}
               disabled={waiveLoading}
@@ -1278,7 +1256,7 @@ export default function Payments() {
           </>
         }
       >
-        {waivingPayment && (
+        {selectedPayment && modal.isOpen('waive') && (
           <div className="space-y-4">
             <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
               <div className="flex items-start gap-3">
@@ -1294,13 +1272,13 @@ export default function Payments() {
 
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="font-medium">
-                {waivingPayment.customer_name || waivingPayment.customer?.name || '未知客戶'}
+                {selectedPayment.customer_name || selectedPayment.customer?.name || '未知客戶'}
               </p>
               <p className="text-sm text-gray-500">
-                {waivingPayment.payment_period} · {waivingPayment.branch_name || waivingPayment.branch?.name || '-'}
+                {selectedPayment.payment_period} · {selectedPayment.branch_name || selectedPayment.branch?.name || '-'}
               </p>
               <p className="text-xl font-bold text-gray-700 mt-2">
-                ${(waivingPayment.total_due || waivingPayment.amount || 0).toLocaleString()}
+                ${(selectedPayment.total_due || selectedPayment.amount || 0).toLocaleString()}
               </p>
             </div>
 
