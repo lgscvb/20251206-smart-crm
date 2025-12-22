@@ -419,7 +419,7 @@ export default function Contracts() {
     if (!startDate || !endDate) return 12
     const start = new Date(startDate)
     const end = new Date(endDate)
-    const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
+    const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth())
     return months > 0 ? months : 12
   }
 
