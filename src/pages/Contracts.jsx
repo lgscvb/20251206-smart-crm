@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useContracts, useCustomers } from '../hooks/useApi'
+import { useContracts, useContractTerminate } from '../hooks/useApi'
+import { useModal } from '../hooks/useModal'
 import { crm, callTool } from '../services/api'
 import useStore from '../store/useStore'
 import DataTable from '../components/DataTable'
@@ -80,14 +81,26 @@ export default function Contracts() {
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(null) // 正在生成 PDF 的合約 ID
 
+  // ==========================================================================
+  // 統一 Modal 狀態管理（解決多 Modal 問題）
+  // modal.open('renew', contract) / modal.isOpen('renew') / modal.getData()
+  // ==========================================================================
+  const modal = useModal()
+
+  // 便捷存取當前 Modal 資料
+  const selectedContract = useMemo(() => {
+    const type = modal.currentType
+    if (['renew', 'taxId', 'terminate', 'edit'].includes(type)) {
+      return modal.currentData
+    }
+    return null
+  }, [modal.currentType, modal.currentData])
+
   // 新增合約相關
-  const [showAddModal, setShowAddModal] = useState(false)
   const [contractForm, setContractForm] = useState(INITIAL_CONTRACT_FORM)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // 續約相關
-  const [showRenewModal, setShowRenewModal] = useState(false)
-  const [selectedContract, setSelectedContract] = useState(null)
+  // 續約表單
   const [renewForm, setRenewForm] = useState({
     new_start_date: '',
     new_end_date: '',
@@ -95,19 +108,15 @@ export default function Contracts() {
     notes: ''
   })
 
-  // 補統編相關
-  const [showTaxIdModal, setShowTaxIdModal] = useState(false)
+  // 補統編表單
   const [taxIdForm, setTaxIdForm] = useState({
     company_tax_id: ''
   })
 
-  // 終止合約相關
-  const [showTerminateModal, setShowTerminateModal] = useState(false)
+  // 終止合約原因
   const [terminateReason, setTerminateReason] = useState('')
 
-  // 編輯合約相關
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [editingContract, setEditingContract] = useState(null)
+  // 編輯合約表單
   const [editForm, setEditForm] = useState(INITIAL_CONTRACT_FORM)
 
   const queryClient = useQueryClient()
@@ -127,7 +136,7 @@ export default function Contracts() {
           type: 'success',
           message: `續約成功！新合約編號：${data.new_contract?.contract_number || ''}`
         })
-        setShowRenewModal(false)
+        modal.close()
         resetRenewForm()
       } else {
         addNotification({ type: 'error', message: data.message || '續約失敗' })
@@ -149,7 +158,7 @@ export default function Contracts() {
           type: 'success',
           message: `統編已更新！${data.note || ''}`
         })
-        setShowTaxIdModal(false)
+        modal.close()
         resetTaxIdForm()
       } else {
         addNotification({ type: 'error', message: data.message || '更新失敗' })
@@ -207,33 +216,8 @@ export default function Contracts() {
     }
   })
 
-  // 終止合約（移動到已結束）mutation
-  const terminateContract = useMutation({
-    mutationFn: async ({ contractId, reason }) => {
-      const response = await fetch(`/api/db/contracts?id=eq.${contractId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'terminated',
-          notes: reason ? `終止原因：${reason}` : null
-        })
-      })
-      if (!response.ok) {
-        throw new Error('終止失敗')
-      }
-      return { success: true }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contracts'] })
-      addNotification({ type: 'success', message: '合約已移動到已結束' })
-      setShowTerminateModal(false)
-      setSelectedContract(null)
-      setTerminateReason('')
-    },
-    onError: (error) => {
-      addNotification({ type: 'error', message: `操作失敗: ${error.message}` })
-    }
-  })
+  // 使用 DDD Hook 終止合約
+  const terminateContract = useContractTerminate()
 
   // 更新合約 mutation
   const updateContract = useMutation({
@@ -251,8 +235,7 @@ export default function Contracts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contracts'] })
       addNotification({ type: 'success', message: '合約已更新' })
-      setShowEditModal(false)
-      setEditingContract(null)
+      modal.close()
       setEditForm(INITIAL_CONTRACT_FORM)
     },
     onError: (error) => {
@@ -275,13 +258,11 @@ export default function Contracts() {
       new_monthly_rent: '',
       notes: ''
     })
-    setSelectedContract(null)
   }
 
   // 重設補統編表單
   const resetTaxIdForm = () => {
     setTaxIdForm({ company_tax_id: '' })
-    setSelectedContract(null)
   }
 
   // 開啟續約 Modal
@@ -301,8 +282,7 @@ export default function Contracts() {
       new_monthly_rent: contract.monthly_rent || '',
       notes: ''
     })
-    setSelectedContract(contract)
-    setShowRenewModal(true)
+    modal.open('renew', contract)
   }
 
   // 開啟補統編 Modal
@@ -310,8 +290,7 @@ export default function Contracts() {
     setTaxIdForm({
       company_tax_id: contract.company_tax_id || ''
     })
-    setSelectedContract(contract)
-    setShowTaxIdModal(true)
+    modal.open('taxId', contract)
   }
 
   // 開啟編輯 Modal
@@ -336,17 +315,16 @@ export default function Contracts() {
       position_number: contract.position_number || '',
       show_stamp: true  // 電子用印預設開啟
     })
-    setEditingContract(contract)
-    setShowEditModal(true)
+    modal.open('edit', contract)
   }
 
   // 處理編輯合約
   const handleEditContract = (e) => {
     e.preventDefault()
-    if (!editingContract) return
+    if (!selectedContract) return
 
     updateContract.mutate({
-      contractId: editingContract.id,
+      contractId: selectedContract.id,
       data: {
         company_name: editForm.company_name || null,
         representative_name: editForm.representative_name || null,
@@ -371,18 +349,19 @@ export default function Contracts() {
 
   // 開啟終止合約 Modal
   const openTerminateModal = (contract) => {
-    setSelectedContract(contract)
     setTerminateReason('')
-    setShowTerminateModal(true)
+    modal.open('terminate', contract)
   }
 
-  // 執行終止合約
-  const handleTerminate = () => {
+  // 執行終止合約（使用 DDD Hook）
+  const handleTerminate = async () => {
     if (!selectedContract) return
-    terminateContract.mutate({
+    await terminateContract.mutateAsync({
       contractId: selectedContract.id,
       reason: terminateReason
     })
+    modal.close()
+    setTerminateReason('')
   }
 
   // 執行續約
@@ -543,7 +522,7 @@ export default function Contracts() {
 
       if (result?.success || result?.result?.success) {
         alert('合約建立成功！')
-        setShowAddModal(false)
+        modal.close()
         setContractForm(INITIAL_CONTRACT_FORM)
         refetch()
         // 導航到新合約詳情頁
@@ -983,9 +962,9 @@ export default function Contracts() {
 
       {/* 新增合約 Modal */}
       <Modal
-        open={showAddModal}
+        open={modal.isOpen('add')}
         onClose={() => {
-          setShowAddModal(false)
+          modal.close()
           setContractForm(INITIAL_CONTRACT_FORM)
         }}
         title="新增合約"
@@ -1217,7 +1196,7 @@ export default function Contracts() {
             <button
               type="button"
               onClick={() => {
-                setShowAddModal(false)
+                modal.close()
                 setContractForm(INITIAL_CONTRACT_FORM)
               }}
               className="btn-secondary"
@@ -1247,9 +1226,9 @@ export default function Contracts() {
 
       {/* 續約 Modal */}
       <Modal
-        open={showRenewModal}
+        open={modal.isOpen('renew')}
         onClose={() => {
-          setShowRenewModal(false)
+          modal.close()
           resetRenewForm()
         }}
         title="合約續約"
@@ -1258,7 +1237,7 @@ export default function Contracts() {
           <>
             <button
               onClick={() => {
-                setShowRenewModal(false)
+                modal.close()
                 resetRenewForm()
               }}
               className="btn-secondary"
@@ -1362,9 +1341,9 @@ export default function Contracts() {
 
       {/* 補統編 Modal */}
       <Modal
-        open={showTaxIdModal}
+        open={modal.isOpen('taxId')}
         onClose={() => {
-          setShowTaxIdModal(false)
+          modal.close()
           resetTaxIdForm()
         }}
         title="補上公司統編"
@@ -1373,7 +1352,7 @@ export default function Contracts() {
           <>
             <button
               onClick={() => {
-                setShowTaxIdModal(false)
+                modal.close()
                 resetTaxIdForm()
               }}
               className="btn-secondary"
@@ -1437,10 +1416,9 @@ export default function Contracts() {
 
       {/* 終止合約 Modal */}
       <Modal
-        open={showTerminateModal}
+        open={modal.isOpen('terminate')}
         onClose={() => {
-          setShowTerminateModal(false)
-          setSelectedContract(null)
+          modal.close()
           setTerminateReason('')
         }}
         title="終止合約"
@@ -1449,8 +1427,7 @@ export default function Contracts() {
           <>
             <button
               onClick={() => {
-                setShowTerminateModal(false)
-                setSelectedContract(null)
+                modal.close()
                 setTerminateReason('')
               }}
               className="btn-secondary"
@@ -1514,13 +1491,12 @@ export default function Contracts() {
 
       {/* 編輯合約 Modal */}
       <Modal
-        open={showEditModal}
+        open={modal.isOpen('edit')}
         onClose={() => {
-          setShowEditModal(false)
-          setEditingContract(null)
+          modal.close()
           setEditForm(INITIAL_CONTRACT_FORM)
         }}
-        title={`編輯合約 ${editingContract?.contract_number || ''}`}
+        title={`編輯合約 ${selectedContract?.contract_number || ''}`}
         size="lg"
       >
         <form onSubmit={handleEditContract} className="space-y-6">
@@ -1750,18 +1726,18 @@ export default function Contracts() {
             <button
               type="button"
               onClick={async () => {
-                if (!editingContract) return
+                if (!selectedContract) return
                 try {
-                  const branchInfo = BRANCHES[editingContract.branch_id] || BRANCHES[1]
+                  const branchInfo = BRANCHES[selectedContract.branch_id] || BRANCHES[1]
                   const pdfData = {
-                    contract_type: editingContract.contract_type,
+                    contract_type: selectedContract.contract_type,
                     branch_company_name: branchInfo.company_name,
                     branch_tax_id: branchInfo.tax_id,
                     branch_representative: branchInfo.representative,
                     branch_address: branchInfo.address,
                     branch_court: branchInfo.court,
-                    branch_id: editingContract.branch_id,
-                    room_number: editingContract.room_number || '',
+                    branch_id: selectedContract.branch_id,
+                    room_number: selectedContract.room_number || '',
                     company_name: editForm.company_name,
                     representative_name: editForm.representative_name,
                     representative_address: editForm.representative_address,
@@ -1779,9 +1755,9 @@ export default function Contracts() {
                     show_stamp: editForm.show_stamp
                   }
                   let PdfComponent
-                  if (editingContract.contract_type === 'office') {
+                  if (selectedContract.contract_type === 'office') {
                     PdfComponent = OfficePDF
-                  } else if (editingContract.contract_type === 'flex_seat') {
+                  } else if (selectedContract.contract_type === 'flex_seat') {
                     PdfComponent = FlexSeatPDF
                   } else {
                     PdfComponent = ContractPDF
@@ -1790,7 +1766,7 @@ export default function Contracts() {
                   const url = URL.createObjectURL(blob)
                   const link = document.createElement('a')
                   link.href = url
-                  link.download = `合約_${editingContract.contract_number}.pdf`
+                  link.download = `合約_${selectedContract.contract_number}.pdf`
                   document.body.appendChild(link)
                   link.click()
                   document.body.removeChild(link)
@@ -1811,8 +1787,7 @@ export default function Contracts() {
               <button
                 type="button"
                 onClick={() => {
-                  setShowEditModal(false)
-                  setEditingContract(null)
+                  modal.close()
                   setEditForm(INITIAL_CONTRACT_FORM)
                 }}
                 className="btn-secondary"

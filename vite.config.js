@@ -17,7 +17,7 @@ export default defineConfig({
         changeOrigin: true,
         secure: true
       },
-      '/ai': {
+      '/ai/': {
         target: 'https://auto.yourspce.org',
         changeOrigin: true,
         secure: true

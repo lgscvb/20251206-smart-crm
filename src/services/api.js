@@ -477,6 +477,15 @@ export const crm = {
       headers: { 'Prefer': 'return=representation' }
     })
     return { success: true, data: response }
+  },
+
+  // 終止合約
+  async terminateContract(contractId, reason, terminateDate = null) {
+    return callTool('contract_terminate', {
+      contract_id: contractId,
+      reason,
+      terminate_date: terminateDate
+    })
   }
 }
 

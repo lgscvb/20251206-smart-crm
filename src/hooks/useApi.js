@@ -89,6 +89,29 @@ export function useContractDetail(contractId) {
   })
 }
 
+export function useContractTerminate() {
+  const queryClient = useQueryClient()
+  const addNotification = useStore((state) => state.addNotification)
+
+  return useMutation({
+    mutationFn: ({ contractId, reason, terminateDate }) =>
+      crm.terminateContract(contractId, reason, terminateDate),
+    onSuccess: (data) => {
+      if (data.success) {
+        queryClient.invalidateQueries({ queryKey: ['contracts'] })
+        queryClient.invalidateQueries({ queryKey: ['contract'] })
+        queryClient.invalidateQueries({ queryKey: ['payments-due'] })
+        addNotification({ type: 'success', message: '合約已終止' })
+      } else {
+        addNotification({ type: 'error', message: data.message || '終止失敗' })
+      }
+    },
+    onError: (error) => {
+      addNotification({ type: 'error', message: `終止失敗: ${error.message}` })
+    }
+  })
+}
+
 // ============================================================================
 // 繳費相關 Hooks
 // ============================================================================
